@@ -639,6 +639,25 @@ bfq_bfqq_resume_state(struct bfq_queue *bfqq, struct bfq_io_cq *bic)
 		bfq_mark_bfqq_IO_bound(bfqq);
 	else
 		bfq_clear_bfqq_IO_bound(bfqq);
+
+	bfqq->wr_coeff = bic->saved_wr_coeff;
+	bfqq->wr_start_at_switch_to_srt = bic->saved_wr_start_at_switch_to_srt;
+	BUG_ON(time_is_after_jiffies(bfqq->wr_start_at_switch_to_srt));
+	bfqq->last_wr_start_finish = bic->saved_last_wr_start_finish;
+	BUG_ON(time_is_after_jiffies(bfqq->last_wr_start_finish));
+
+	if (bfqq->wr_coeff > 1 && (bfq_bfqq_in_large_burst(bfqq) ||
+	    time_is_before_jiffies(bfqq->last_wr_start_finish +
+				   bfqq->wr_cur_max_time))) {
+		bfq_log_bfqq(bfqq->bfqd, bfqq,
+			     "resume state: switching off wr (%u + %u < %u)",
+			     bfqq->last_wr_start_finish, bfqq->wr_cur_max_time,
+			     jiffies);
+
+		bfqq->wr_coeff = 1;
+	}
+	/* make sure weight will be updated, however we got here */
+	bfqq->entity.prio_changed = 1;
 }
 
 static int bfqq_process_refs(struct bfq_queue *bfqq)
