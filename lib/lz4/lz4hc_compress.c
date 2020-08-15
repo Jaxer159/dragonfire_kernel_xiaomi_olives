@@ -498,17 +498,28 @@ _search3:
 	}
 
 	/* Encode Last Literals */
-	lastrun = (int)(iend - anchor);
-	if (lastrun >= (int)RUN_MASK) {
-		*op++ = (RUN_MASK << ML_BITS);
-		lastrun -= RUN_MASK;
-		for (; lastrun > 254 ; lastrun -= 255)
-			*op++ = 255;
-		*op++ = (u8) lastrun;
-	} else
-		*op++ = (lastrun << ML_BITS);
-	memcpy(op, anchor, iend - anchor);
-	op += iend - anchor;
+	{
+		int lastRun = (int)(iend - anchor);
+
+		if ((limit)
+			&& (((char *)op - dest) + lastRun + 1
+				+ ((lastRun + 255 - RUN_MASK)/255)
+					> (U32)maxOutputSize)) {
+			/* Check output limit */
+			return 0;
+		}
+		if (lastRun >= (int)RUN_MASK) {
+			*op++ = (RUN_MASK<<ML_BITS);
+			lastRun -= RUN_MASK;
+			for (; lastRun > 254 ; lastRun -= 255)
+				*op++ = 255;
+			*op++ = (BYTE) lastRun;
+		} else
+			*op++ = (BYTE)(lastRun<<ML_BITS);
+		LZ4_memcpy(op, anchor, iend - anchor);
+		op += iend - anchor;
+	}
+
 	/* End */
 	return (int) (((char *)op) - dest);
 }
