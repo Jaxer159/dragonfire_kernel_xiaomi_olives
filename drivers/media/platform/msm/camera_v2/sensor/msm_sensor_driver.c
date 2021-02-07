@@ -747,7 +747,8 @@ static int32_t msm_sensor_driver_is_special_support(
 	return rc;
 }
 
-#if defined OLIVE_MSM_CAMERA_HW_INFO || defined OLIVEWOOD_MSM_CAMERA_HW_INFO
+// for olive caemra hw info
+#if defined OLIVE_MSM_CAMERA_HW_INFO || defined OLIVEWOOD_MSM_CAMERA_HW_INFO || defined OLIVELITE_MSM_CAMERA_HW_INFO
 	uint32_t i = 0;
 	char olive_rear_camera_str_buff[6][2][20] = {
 		{"olive_imx486_ofilm", "sony_imx486_i"},
@@ -767,23 +768,6 @@ static int32_t msm_sensor_driver_is_special_support(
 		{"olivewood_gc02m1_sunny", "galaxycore_02m1_iii"},
 	};
 #endif
-
-#ifdef OLIVELITE_MSM_CAMERA_HW_INFO
-	uint32_t i = 0;
-	char olive_rear_camera_str_buff[6][2][20] = {
-		{"olive_imx486_ofilm", "sony_imx486_i"},
-		{"olive_imx486_sunny", "sony_imx486_ii"},
-		{"olive_imx363_qtech", "sony_imx363_i"},
-		{"olive_s5k2l7_sunny", "samsung_s5k2l7_ii"},
-		{"olive_ov13b10_qtech", "omnivision_13b10_i"},
-		{"olive_ov13b10_ofilm", "omnivision_13b10_ii"},
-	};
-	char olive_front_camera_str_buff[2][2][20] = {
-		{"olive_ov8856_qtech", "omnivision_8856_ii"},
-		{"olive_ov8856_sunny", "omnivision_8856_i"},
-	};
-#endif
-
 
 /* static function definition */
 int32_t msm_sensor_driver_probe(void *setting,
