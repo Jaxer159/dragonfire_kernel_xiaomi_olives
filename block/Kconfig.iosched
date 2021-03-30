@@ -59,7 +59,7 @@ choice
 	config DEFAULT_NOOP
 		bool "No-op"
 
-config DEFAULT_SIO
+	config DEFAULT_SIO
 		bool "SIO" if IOSCHED_SIO=y
 
 	config DEFAULT_FIOPS
@@ -67,6 +67,9 @@ config DEFAULT_SIO
 
 	config DEFAULT_ZEN
 		bool "ZEN" if IOSCHED_ZEN=y
+		
+	config DEFAULT_MAPLE
+		bool "MAPLE" if IOSCHED_MAPLE=y
 
 	config DEFAULT_TRIPNDROID
 		bool "TD" if IOSCHED_TRIPNDROID=y
