@@ -59,7 +59,7 @@ static DEFINE_SPINLOCK(suspend_lock);
 #define TAG "msm_adreno_tz: "
 
 #if 1
-static unsigned int adrenoboost = 1;
+static unsigned int adrenoboost = 0;
 #endif
 
 static u64 suspend_time;
@@ -505,8 +505,6 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 		level += val;
 		level = max(level, 0);
 		level = min_t(int, level, devfreq->profile->max_state - 1);
-<<<<<<< HEAD
-=======
 		pr_debug("%s ADRENO jumping level = %d last_level = %d total=%d busy=%d original busy_time=%d \n", __func__, level, priv->bin.last_level, (int)priv->bin.total_time, (int)priv->bin.busy_time, (int)stats.busy_time);
 		priv->bin.last_level = level;
 	} else {
