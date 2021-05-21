@@ -25,6 +25,10 @@ ifeq ($(strip $(FACTORY_VERSION_MODE)), true)
 AUDIO_SELECT  += CONFIG_SND_SOC_MBHC_RETRY=y
 endif
 
+ifeq ($(strip $(FACTORY_VERSION_MODE)), true)
+AUDIO_SELECT  += CONFIG_SND_SOC_MBHC_RETRY=y
+endif
+
 AUDIO_CHIPSET := audio
 # Build/Package only in case of supported target
 ifeq ($(call is-board-platform-in-list,msm8909 msm8953 msm8937 sdm845 sdm710 qcs605),true)

@@ -33,6 +33,14 @@ ifeq ($(strip $(TARGET_AW87329)),true)
 AUDIO_SELECT  += TARGET_AW87329=y
 endif
 
+ifeq ($(strip $(TARGET_AW87519)),true)
+AUDIO_SELECT  += TARGET_AW87519=y
+endif
+
+ifeq ($(strip $(TARGET_AW87329)),true)
+AUDIO_SELECT  += TARGET_AW87329=y
+endif
+
 AUDIO_CHIPSET := audio
 # Build/Package only in case of supported target
 ifeq ($(call is-board-platform-in-list,msm8909 msm8953 msm8937 sdm845 sdm710 qcs605),true)

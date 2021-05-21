@@ -1,5 +1,5 @@
 /* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -41,7 +41,6 @@
 #define EUR_HS_HIGH 15000
 
 static struct switch_dev accdet_data;
-
 void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
 			  struct snd_soc_jack *jack, int status, int mask)
 {
@@ -932,10 +931,20 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 	#else
 
 	WCD_MBHC_REG_READ(WCD_MBHC_MECH_DETECTION_TYPE, detection_type);
+	while(loop_time != 0){
+		if(mbhc->current_plug != detection_type)
+			break;
 
+		WCD_MBHC_REG_READ(WCD_MBHC_MECH_DETECTION_TYPE, detection_type);
+		mdelay(50);
+		loop_time --;
+	}
 	/* Set the detection type appropriately */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MECH_DETECTION_TYPE,
 				 !detection_type);
+	pr_info("%s: %d  mbhc->current_plug: %d detection_type: %d\n", __func__, loop_time,
+				mbhc->current_plug, detection_type);
+	#else
 
 	pr_info("%s: mbhc->current_plug: %d detection_type: %d\n", __func__,
 			mbhc->current_plug, detection_type);
