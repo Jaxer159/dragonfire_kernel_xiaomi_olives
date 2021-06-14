@@ -8,7 +8,7 @@
 KERNEL_DIR=$PWD
 KERN_IMG=$KERNEL_DIR/out/arch/arm64/boot/Image.gz-dtb
 ZIP_DIR=$KERNEL_DIR/AnyKernel3
-CONFIG=dragonfire_olive_defconfig
+CONFIG=dragonfire_olives_defconfig
 
 # Time compiling
 buildstart=$SECONDS
@@ -75,10 +75,6 @@ STRIP="$HOME/toolchains/proton-clang/aarch64-linux-gnu/bin/strip$(echo "$(find "
 
 for MODULES in $(find "${OUTDIR}" -name '*.ko'); do
     "${STRIP}" --strip-unneeded --strip-debug "${MODULES}"
-    "${OUTDIR}"/scripts/sign-file sha512 \
-            "${OUTDIR}/certs/signing_key.pem" \
-            "${OUTDIR}/certs/signing_key.x509" \
-            "${MODULES}"
     find "${OUTDIR}" -name '*.ko' -exec cp {} "${VENDOR_MODULEDIR}" \;
 
     case ${MODULES} in
