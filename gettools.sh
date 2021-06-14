@@ -5,7 +5,7 @@
 # Android Kernel Build Script
 
 # Clone AnyKernel3
-git clone https://github.com/AstonishingBoy/AnyKernel3 -b dragonfire_olive
+git clone https://github.com/jaxer159/AnyKernel3 -b dragonfire_sdm439
 
 #Download Clang
 if [ ! -d $HOME/toolchains/proton-clang ]; then
