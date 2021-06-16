@@ -138,12 +138,12 @@
 
 		trips {
 			quiet_modem_439_trip1: quiet-modem-trip0 {
-				temperature = <44000>;
+				temperature = <59000>;
 				hysteresis = <4000>;
 				type = "passive";
 			};
 			quiet_modem_439_trip2: quiet-modem-trip1 {
-				temperature = <46000>;
+				temperature = <61000>;
 				hysteresis = <4000>;
 				type = "passive";
 			};
@@ -153,7 +153,7 @@
 				type = "passive";
 			};
 			quiet_modem_439_trip3: quiet-modem-trip2 {
-				temperature = <48000>;
+				temperature = <63000>;
 				hysteresis = <2000>;
 				type = "passive";
 			};
@@ -184,7 +184,7 @@
 				type = "passive";
 			};
 			quiet_modem_439_trip4: quiet-modem-trip3 {
-				temperature = <55000>;
+				temperature = <70000>;
 				hysteresis = <5000>;
 				type = "passive";
 			};
