@@ -7,11 +7,8 @@
 # Main environtment
 KERNEL_DIR=$PWD
 KERN_IMG=$KERNEL_DIR/out/arch/arm64/boot/Image.gz-dtb
-ZIP_DIR=$KERNEL_DIR/AnyKernel3
+ZIP_DIR=$KERNEL_DIR/IW
 CONFIG=dragonfire_olives_iw_defconfig
-
-# Time compiling
-buildstart=$SECONDS
 
 # Export
 export ARCH=arm64
@@ -94,10 +91,9 @@ cd $ZIP_DIR
 cp $KERN_IMG zImage
 cp $OUTDIR/arch/arm64/boot/dtbo.img $ZIP_DIR
 make normal &>/dev/null
-buildend=$(($SECONDS - $buildstart))
-buildendseconds=$(($buildend % 60))
-buildendminutes=$(($buildend / 60))
-echo "Build completed in ${buildendminutes} minute(s) and ${buildendseconds} second(s) !"
-echo "Flashable zip generated under $ZIP_DIR."
 cd ..
+TIME=$(date "+%Y%m%d-%H%M")
+ZIP_NAME="IW-Dragonfire-Kernel-olives-$TIME.zip"
+cp IW/$ZIP_NAME product/
 # Build end
+echo "Build completed!"

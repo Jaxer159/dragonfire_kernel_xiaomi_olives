@@ -5,6 +5,8 @@
 # Android Kernel Build Script
 
 # Clone AnyKernel3
+git clone https://github.com/jaxer159/AnyKernel3 -b dragonfire_olives_iw
+mv AnyKernel3/ IW/
 git clone https://github.com/jaxer159/AnyKernel3 -b dragonfire_olives
 
 #Download Clang
