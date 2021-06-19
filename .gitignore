@@ -9,6 +9,11 @@
 #
 # Normal rules
 #
+product/
+!product/clean.sh
+AnyKernel3/
+IW/
+libufdt/
 .*
 *.o
 *.o.*
