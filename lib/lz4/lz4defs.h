@@ -98,61 +98,52 @@ typedef uintptr_t uptrval;
 #define ML_MASK	((1U << ML_BITS) - 1)
 #define RUN_BITS (8 - ML_BITS)
 #define RUN_MASK ((1U << RUN_BITS) - 1)
+#define MEMORY_USAGE	14
+#define MINMATCH	4
+#define SKIPSTRENGTH	6
+#define LASTLITERALS	5
+#define MFLIMIT		(COPYLENGTH + MINMATCH)
+#define MINLENGTH	(MFLIMIT + 1)
+#define MAXD_LOG	16
+#define MAXD		(1 << MAXD_LOG)
+#define MAXD_MASK	(u32)(MAXD - 1)
+#define MAX_DISTANCE	(MAXD - 1)
+#define HASH_LOG	(MAXD_LOG - 1)
+#define HASHTABLESIZE	(1 << HASH_LOG)
+#define MAX_NB_ATTEMPTS	256
+#define OPTIMAL_ML	(int)((ML_MASK-1)+MINMATCH)
+#define LZ4_64KLIMIT	((1<<16) + (MFLIMIT - 1))
+#define HASHLOG64K	((MEMORY_USAGE - 2) + 1)
+#define HASH64KTABLESIZE	(1U << HASHLOG64K)
+#define LZ4_HASH_VALUE(p)	(((A32(p)) * 2654435761U) >> \
+				((MINMATCH * 8) - (MEMORY_USAGE-2)))
+#define LZ4_HASH64K_VALUE(p)	(((A32(p)) * 2654435761U) >> \
+				((MINMATCH * 8) - HASHLOG64K))
+#define HASH_VALUE(p)		(((A32(p)) * 2654435761U) >> \
+				((MINMATCH * 8) - HASH_LOG))
 
-/*-************************************
- *	Reading and writing into memory
- **************************************/
-static FORCE_INLINE U16 LZ4_read16(const void *ptr)
-{
-	return get_unaligned((const U16 *)ptr);
-}
+#if LZ4_ARCH64/* 64-bit */
+#define STEPSIZE 8
 
-static FORCE_INLINE U32 LZ4_read32(const void *ptr)
-{
-	return get_unaligned((const U32 *)ptr);
-}
+#define LZ4_COPYSTEP(s, d)	\
+	do {			\
+		PUT8(s, d);	\
+		d += 8;		\
+		s += 8;		\
+	} while (0)
 
-static FORCE_INLINE size_t LZ4_read_ARCH(const void *ptr)
-{
-	return get_unaligned((const size_t *)ptr);
-}
+#define LZ4_COPYPACKET(s, d)	LZ4_COPYSTEP(s, d)
 
-static FORCE_INLINE void LZ4_write16(void *memPtr, U16 value)
-{
-	put_unaligned(value, (U16 *)memPtr);
-}
+#define LZ4_SECURECOPY(s, d, e)			\
+	do {					\
+		if (d < e) {			\
+			LZ4_WILDCOPY(s, d, e);	\
+		}				\
+	} while (0)
+#define HTYPE u32
 
-static FORCE_INLINE void LZ4_write32(void *memPtr, U32 value)
-{
-	put_unaligned(value, (U32 *)memPtr);
-}
-
-static FORCE_INLINE U16 LZ4_readLE16(const void *memPtr)
-{
-	return get_unaligned_le16(memPtr);
-}
-
-static FORCE_INLINE void LZ4_writeLE16(void *memPtr, U16 value)
-{
-	return put_unaligned_le16(value, memPtr);
-}
-
-/*
- * LZ4 relies on memcpy with a constant size being inlined. In freestanding
- * environments, the compiler can't assume the implementation of memcpy() is
- * standard compliant, so apply its specialized memcpy() inlining logic. When
- * possible, use __builtin_memcpy() to tell the compiler to analyze memcpy()
- * as-if it were standard compliant, so it can inline it in freestanding
- * environments. This is needed when decompressing the Linux Kernel, for example.
- */
-#define LZ4_memcpy(dst, src, size) __builtin_memcpy(dst, src, size)
-
-static FORCE_INLINE void LZ4_copy8(void *dst, const void *src)
-{
-#if LZ4_ARCH64
-	U64 a = get_unaligned((const U64 *)src);
-
-	put_unaligned(a, (U64 *)dst);
+#ifdef __BIG_ENDIAN
+#define LZ4_NBCOMMONBYTES(val) (__builtin_clzll(val) >> 3)
 #else
 	U32 a = get_unaligned((const U32 *)src);
 	U32 b = get_unaligned((const U32 *)src + 1);
