@@ -93,7 +93,7 @@ cp $OUTDIR/arch/arm64/boot/dtbo.img $ZIP_DIR
 make normal &>/dev/null
 cd ..
 TIME=$(date "+%Y%m%d-%H%M")
-ZIP_NAME="IW-Dragonfire-Kernel-olives-$TIME.zip"
+ZIP_NAME="IW-DragonFire-Kernel-olives-$TIME.zip"
 cp IW/$ZIP_NAME product/
 # Build end
 echo "Build completed!"
