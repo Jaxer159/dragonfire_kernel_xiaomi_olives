@@ -96,7 +96,7 @@ cd product/
 ./clean.sh
 cd ..
 TIME=$(date "+%Y%m%d-%H%M")
-ZIP_NAME="Dragonfire-Kernel-olives-$TIME.zip"
+ZIP_NAME="DragonFire-Kernel-olives-$TIME.zip"
 cp AnyKernel3/$ZIP_NAME product/
 # Build end
 sudo ./build_iw.sh
