@@ -1183,7 +1183,6 @@ static void bfq_update_vtime(struct bfq_service_tree *st, u64 new_value)
 {
 	if (new_value > st->vtime) {
 		st->vtime = new_value;
->>>>>>> 5a7d3b4dafef... Improve and fix some bugs in hierarchical code
 		bfq_forget_idle(st);
 	}
 }
