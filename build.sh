@@ -95,7 +95,7 @@ cd ..
 cd product/
 ./clean.sh
 cd ..
-VER=v1.0
+VER=v1.2
 ZIP_NAME="Fluttershy-Kernel-SDM439-$VER.zip"
 cp AnyKernel3/$ZIP_NAME product/
 # Build end
