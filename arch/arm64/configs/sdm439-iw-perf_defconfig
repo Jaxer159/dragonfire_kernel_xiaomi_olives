@@ -1,8 +1,6 @@
-<<<<<<< HEAD:arch/arm64/configs/sdm439-iw-perf_defconfig
 CONFIG_LOCALVERSION="-FluttershyKernel-v1.2-IW"
 CONFIG_LOCALVERSION_AUTO=n
 CONFIG_ZRAM_SIZE_OVERRIDE=2
-# CONFIG_LOCALVERSION_AUTO is not set
 # CONFIG_FHANDLE is not set
 CONFIG_AUDIT=y
 # CONFIG_AUDITSYSCALL is not set
