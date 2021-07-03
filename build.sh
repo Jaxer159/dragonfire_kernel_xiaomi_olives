@@ -64,7 +64,7 @@ cd ..
 
 # For MIUI Build
 # Credit Adek Maulana <adek@techdro.id>
-OUTDIR="$KERNEL_DIR/out/"
+OUTDIR="$KERNEL_DIR/out"
 VENDOR_MODULEDIR="$KERNEL_DIR/AnyKernel3/modules/vendor/lib/modules"
 
 STRIP="$HOME/toolchains/proton-clang/aarch64-linux-gnu/bin/strip$(echo "$(find "$HOME/toolchains/proton-clang/bin" -type f -name "aarch64-*-gcc")" | awk -F '/' '{print $NF}' |\
