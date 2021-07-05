@@ -92,8 +92,8 @@ cp $KERN_IMG zImage
 cp $OUTDIR/arch/arm64/boot/dtbo.img $ZIP_DIR
 make normal &>/dev/null
 cd ..
-TIME=$(date "+%Y%m%d-%H%M")
-ZIP_NAME="IW-DragonFire-Kernel-olives-$TIME.zip"
+VER=3.1
+ZIP_NAME="IW-DragonFire-Kernel-olives-$VER.zip"
 cp IW/$ZIP_NAME product/
 # Build end
 echo "Build completed!"
