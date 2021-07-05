@@ -1134,7 +1134,8 @@ cmd_fail:
 	cmi_deregister(cpe_d.cpe_cmi_handle);
 }
 
-static int cpe_boot_complete(struct cpe_info *t_info)
+static enum cpe_process_result cpe_boot_complete(
+		struct cpe_info *t_info)
 {
 	struct cmi_core_svc_cmdrsp_shared_mem_alloc *p = NULL;
 

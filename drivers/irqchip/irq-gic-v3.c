@@ -228,6 +228,9 @@ void gic_v3_dist_save(void)
 	void __iomem *base = gic_data.dist_base;
 	int reg, i;
 
+	if (!base)
+		return;
+
 	bitmap_zero(irqs_restore, MAX_IRQ);
 
 	for (reg = SAVED_ICFGR; reg < NUM_SAVED_GICD_REGS; reg++) {
@@ -424,6 +427,9 @@ static void _gic_v3_dist_clear_reg(u32 offset)
  */
 void gic_v3_dist_restore(void)
 {
+	if (!gic_data.dist_base)
+		return;
+
 	_gic_v3_dist_check_icfgr();
 	_gic_v3_dist_check_ipriorityr();
 	_gic_v3_dist_check_isenabler();
@@ -1052,7 +1058,7 @@ static void gic_raise_softirq(const struct cpumask *mask, unsigned int irq)
 	isb();
 }
 
-static void gic_smp_init(void)
+static void __init gic_smp_init(void)
 {
 	set_smp_cross_call(gic_raise_softirq);
 	cpuhp_setup_state_nocalls(CPUHP_AP_IRQ_GICV3_STARTING,
@@ -1097,7 +1103,7 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 }
 #else
 #define gic_set_affinity	NULL
-#define gic_smp_init()		do { } while(0)
+static void __init gic_smp_init(void) { };
 #endif
 
 #ifdef CONFIG_CPU_PM

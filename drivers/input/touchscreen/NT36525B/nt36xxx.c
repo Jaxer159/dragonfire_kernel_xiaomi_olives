@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 - 2018 Novatek, Inc.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * $Revision: 43542 $
  * $Date: 2019-04-19 09:59:04 +0800 (週五, 19 四月 2019) $
@@ -25,6 +25,7 @@
 #include <linux/input/mt.h>
 #include <linux/of_gpio.h>
 #include <linux/of_irq.h>
+#include <linux/sysctl.h>
 
 #if defined(CONFIG_FB)
 #ifdef CONFIG_DRM_MSM
@@ -40,6 +41,12 @@
 #if NVT_TOUCH_ESD_PROTECT
 #include <linux/jiffies.h>
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
+
+#if WAKEUP_GESTURE
+static int sysctl_dt2w_min_val = 0;
+static int sysctl_dt2w_max_val = 1;
+static struct ctl_table_header *dt2w_sysctl_header;
+#endif
 
 #if NVT_TOUCH_ESD_PROTECT
 static struct delayed_work nvt_esd_check_work;
@@ -93,7 +100,7 @@ static void nvt_ts_late_resume(struct early_suspend *h);
 
 static int32_t nvt_ts_resume(struct device *dev);
 
-#define NVT_RESUME_EN                    1
+#define NVT_RESUME_EN                    0
 /************************************************************************
 * Name: create reusme workqueue
 * Brief: put resume period into workqueue
@@ -1293,7 +1300,7 @@ Description:
 return:
 	n.a.
 *******************************************************/
-int nvt_gesture_flag;
+int nvt_gesture_flag = 1;
 static irqreturn_t nvt_ts_work_func(int irq, void *data)
 {
 	int32_t ret = -1;
@@ -1557,6 +1564,31 @@ int nvt_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int co
 }
 
 #endif
+
+#if WAKEUP_GESTURE
+static struct ctl_table dt2w_child_table[] = {
+    {
+        .procname       = "dt2w",
+        .maxlen         = sizeof(int),
+        .mode           = 0666,
+        .data           = &nvt_gesture_flag,
+        .proc_handler   = &proc_dointvec_minmax,
+        .extra1         = &sysctl_dt2w_min_val,
+        .extra2         = &sysctl_dt2w_max_val,
+    },
+    {}
+};
+
+static struct ctl_table dt2w_parent_table[] = {
+    {
+        .procname       = "dev",
+        .mode           = 0555,
+        .child          = dt2w_child_table,
+    },
+    {}
+};
+#endif
+
 /*******************************************************
 Description:
 	Novatek touchscreen driver probe function.
@@ -1733,7 +1765,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		NVT_LOG("int_trigger_type=%d\n", ts->int_trigger_type);
 		ts->irq_enabled = true;
 		ret = request_threaded_irq(client->irq, NULL, nvt_ts_work_func,
-				ts->int_trigger_type | IRQF_ONESHOT | IRQF_PERF_CRITICAL, NVT_SPI_NAME, ts);
+				ts->int_trigger_type | IRQF_ONESHOT, NVT_SPI_NAME, ts);
 		if (ret != 0) {
 			NVT_ERR("request irq failed. ret=%d\n", ret);
 			goto err_int_request_failed;
@@ -1842,6 +1874,15 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	if (ret) {
 		NVT_ERR("register early suspend failed. ret=%d\n", ret);
 		goto err_register_early_suspend_failed;
+	}
+#endif
+
+#if WAKEUP_GESTURE
+	/* DT2W sysctl */
+	dt2w_sysctl_header = register_sysctl_table(dt2w_parent_table);
+	if (!dt2w_sysctl_header) {
+		printk(KERN_ALERT "Error: Failed to register dt2w_sysctl_header\n");
+		return -EFAULT;
 	}
 #endif
 
@@ -2062,6 +2103,11 @@ static void nvt_ts_shutdown(struct spi_device *client)
 
 #if WAKEUP_GESTURE
 	device_init_wakeup(&ts->input_dev->dev, 0);
+#endif
+
+#if WAKEUP_GESTURE
+	/* DT2W sysctl */
+	unregister_sysctl_table(dt2w_sysctl_header);
 #endif
 }
 

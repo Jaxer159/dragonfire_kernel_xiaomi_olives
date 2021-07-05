@@ -1978,7 +1978,8 @@ struct wcd_cpe_core *wcd_cpe_init(const char *img_fname,
 	}
 
 	card = codec->component.card->snd_card;
-	snprintf(proc_name, sizeof(proc_name), "%s%d%s", cpe_name, id, state_name);
+	snprintf(proc_name, sizeof(proc_name), "%s%d%s", cpe_name, id,
+	        state_name);
 	entry = snd_info_create_card_entry(card, proc_name,
 					   card->proc_root);
 	if (entry) {
@@ -2902,9 +2903,7 @@ static int wcd_cpe_send_param_snd_model(struct wcd_cpe_core *core,
 	int ret = 0;
 	struct cmi_obm_msg obm_msg;
 	struct cpe_param_data *param_d;
-	
-	obm_msg.hdr.hdr_info = 0;
-	obm_msg.hdr.pld_info = 0;
+
 
 	ret = fill_cmi_header(&obm_msg.hdr, session->id,
 			CMI_CPE_LSM_SERVICE_ID, 0, 20,

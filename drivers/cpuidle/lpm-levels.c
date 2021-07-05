@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2006-2007 Adam Belay <abelay@novell.com>
  * Copyright (C) 2009 Intel Corporation
  *
@@ -35,8 +35,6 @@
 #include <linux/sched.h>
 #include <linux/cpu_pm.h>
 #include <linux/cpuhotplug.h>
-#include <linux/workqueue.h>
-#include <linux/fb.h>
 #include <soc/qcom/pm.h>
 #include <soc/qcom/event_timer.h>
 #include <soc/qcom/lpm_levels.h>
@@ -69,22 +67,8 @@ struct lpm_cluster *lpm_root_node;
 static bool lpm_prediction = true;
 module_param_named(lpm_prediction, lpm_prediction, bool, 0664);
 
-static bool cluster_use_deepest_state;
-module_param(cluster_use_deepest_state, bool, 0664);
-
 static uint32_t bias_hyst;
 module_param_named(bias_hyst, bias_hyst, uint, 0664);
-
-static bool cluster_deepest_state_auto __read_mostly = true;
-module_param_named(cluster_deepest_state_auto, cluster_deepest_state_auto, bool,  0644);
-
-static short cluster_deepest_state_auto_timeout __read_mostly = 3000;
-module_param_named(cluster_deepest_state_auto_timeout, cluster_deepest_state_auto_timeout, short, 0644);
-
-static bool screen_on = true;
-
-static struct workqueue_struct *enforce_deepest_state_wq;
-static struct delayed_work enforce_deepest_state_work;
 
 struct lpm_history {
 	uint32_t resi[MAXSAMPLES];
@@ -102,7 +86,6 @@ static DEFINE_PER_CPU(struct lpm_cpu*, cpu_lpm);
 static bool suspend_in_progress;
 static struct hrtimer lpm_hrtimer;
 static DEFINE_PER_CPU(struct hrtimer, histtimer);
-static DEFINE_PER_CPU(struct hrtimer, biastimer);
 
 static void cluster_unprepare(struct lpm_cluster *cluster,
 		const struct cpumask *cpu, int child_idx, bool from_idle,
@@ -136,11 +119,6 @@ uint32_t register_system_pm_ops(struct system_pm_ops *pm_ops)
 	sys_pm_ops = pm_ops;
 
 	return 0;
-}
-
-void lpm_cluster_use_deepest_state(bool enable)
-{
-	cluster_use_deepest_state = enable;
 }
 
 static uint32_t least_cluster_latency(struct lpm_cluster *cluster,
@@ -400,34 +378,6 @@ static void msm_pm_set_timer(uint32_t modified_time_us)
 	hrtimer_start(&lpm_hrtimer, modified_ktime, HRTIMER_MODE_REL_PINNED);
 }
 
-static void biastimer_cancel(void)
-{
-	unsigned int cpu = raw_smp_processor_id();
-	struct hrtimer *cpu_biastimer = &per_cpu(biastimer, cpu);
-	ktime_t time_rem;
-
-	time_rem = hrtimer_get_remaining(cpu_biastimer);
-	if (ktime_to_us(time_rem) <= 0)
-		return;
-
-	hrtimer_try_to_cancel(cpu_biastimer);
-}
-
-static enum hrtimer_restart biastimer_fn(struct hrtimer *h)
-{
-	return HRTIMER_NORESTART;
-}
-
-static void biastimer_start(uint32_t time_ns)
-{
-	ktime_t bias_ktime = ns_to_ktime(time_ns);
-	unsigned int cpu = raw_smp_processor_id();
-	struct hrtimer *cpu_biastimer = &per_cpu(biastimer, cpu);
-
-	cpu_biastimer->function = biastimer_fn;
-	hrtimer_start(cpu_biastimer, bias_ktime, HRTIMER_MODE_REL_PINNED);
-}
-
 static uint64_t lpm_cpuidle_predict(struct cpuidle_device *dev,
 		struct lpm_cpu *cpu, int *idx_restrict,
 		uint32_t *idx_restrict_time)
@@ -584,22 +534,15 @@ static void clear_predict_history(void)
 
 static void update_history(struct cpuidle_device *dev, int idx);
 
-static inline bool is_cpu_biased(int cpu, uint64_t *bias_time)
+static inline bool is_cpu_biased(int cpu)
 {
 	u64 now = sched_clock();
 	u64 last = sched_get_cpu_last_busy_time(cpu);
-	u64 diff = 0;
 
 	if (!last)
 		return false;
 
-	diff = now - last;
-	if (diff < BIAS_HYST) {
-		*bias_time = BIAS_HYST - diff;
-		return true;
-	}
-
-	return false;
+	return (now - last) < BIAS_HYST;
 }
 
 static int cpu_power_select(struct cpuidle_device *dev,
@@ -618,7 +561,6 @@ static int cpu_power_select(struct cpuidle_device *dev,
 	uint32_t next_wakeup_us = (uint32_t)sleep_us;
 	uint32_t *min_residency = get_per_cpu_min_residency(dev->cpu);
 	uint32_t *max_residency = get_per_cpu_max_residency(dev->cpu);
-	uint64_t bias_time = 0;
 
 	if ((sleep_disabled && !cpu_isolated(dev->cpu)) || sleep_us < 0)
 		return best_level;
@@ -627,10 +569,8 @@ static int cpu_power_select(struct cpuidle_device *dev,
 
 	next_event_us = (uint32_t)(ktime_to_us(get_next_event_time(dev->cpu)));
 
-	if (is_cpu_biased(dev->cpu, &bias_time) && (!cpu_isolated(dev->cpu))) {
-		cpu->bias = bias_time;
+	if (is_cpu_biased(dev->cpu) && (!cpu_isolated(dev->cpu)))
 		goto done_select;
-	}
 
 	for (i = 0; i < cpu->nlevels; i++) {
 		struct lpm_cpu_level *level = &cpu->levels[i];
@@ -644,7 +584,7 @@ static int cpu_power_select(struct cpuidle_device *dev,
 
 		lvl_latency_us = pwr_params->latency_us;
 
-		if (latency_us <= lvl_latency_us)
+		if (latency_us < lvl_latency_us)
 			break;
 
 		if (next_event_us) {
@@ -694,7 +634,8 @@ static int cpu_power_select(struct cpuidle_device *dev,
 	 * incase of misprediciton
 	 */
 	if ((predicted || (idx_restrict != (cpu->nlevels + 1)))
-			&& (best_level < (cpu->nlevels-1))) {
+			&& ((best_level >= 0)
+			&& (best_level < (cpu->nlevels-1)))) {
 		htime = predicted + cpu->tmr_add;
 		if (htime == cpu->tmr_add)
 			htime = idx_restrict_time;
@@ -935,26 +876,6 @@ static void clear_cl_predict_history(void)
 	}
 }
 
-static int cluster_select_deepest(struct lpm_cluster *cluster)
-{
-	int i;
-
-	for (i = cluster->nlevels - 1; i >= 0; i--) {
-		struct lpm_cluster_level *level = &cluster->levels[i];
-
-		if (level->notify_rpm) {
-			if (!(sys_pm_ops && sys_pm_ops->sleep_allowed))
-				continue;
-			if (!sys_pm_ops->sleep_allowed())
-				continue;
-		}
-
-		break;
-	}
-
-	return i;
-}
-
 static int cluster_select(struct lpm_cluster *cluster, bool from_idle,
 							int *ispred)
 {
@@ -968,9 +889,6 @@ static int cluster_select(struct lpm_cluster *cluster, bool from_idle,
 
 	if (!cluster)
 		return -EINVAL;
-
-	if (cluster_use_deepest_state)
-		return cluster_select_deepest(cluster);
 
 	sleep_us = (uint32_t)get_cluster_sleep_time(cluster,
 						from_idle, &cpupred_us);
@@ -1003,7 +921,7 @@ static int cluster_select(struct lpm_cluster *cluster, bool from_idle,
 					&level->num_cpu_votes))
 			continue;
 
-		if (from_idle && latency_us <= pwr_params->latency_us)
+		if (from_idle && latency_us < pwr_params->latency_us)
 			break;
 
 		if (sleep_us < pwr_params->time_overhead_us)
@@ -1330,10 +1248,8 @@ static bool psci_enter_sleep(struct lpm_cpu *cpu, int idx, bool from_idle)
 	 */
 
 	if (!idx) {
-		if (cpu->bias)
-			biastimer_start(cpu->bias);
 		stop_critical_timings();
-		wfi();
+		cpu_do_idle();
 		start_critical_timings();
 		return 1;
 	}
@@ -1448,10 +1364,6 @@ exit:
 		histtimer_cancel();
 		clusttimer_cancel();
 	}
-	if (cpu->bias) {
-		biastimer_cancel();
-		cpu->bias = 0;
-	}
 	local_irq_enable();
 	return idx;
 }
@@ -1528,6 +1440,7 @@ static struct cpuidle_governor lpm_governor = {
 	.name =		"qcom",
 	.rating =	30,
 	.select =	lpm_cpuidle_select,
+	.owner =	THIS_MODULE,
 };
 
 static int cluster_cpuidle_register(struct lpm_cluster *cl)
@@ -1711,45 +1624,6 @@ static int lpm_suspend_enter(suspend_state_t state)
 	return 0;
 }
 
-static int fb_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
-{
-	struct fb_event *evdata = data;
-	int *blank;
-
-	if (event != FB_EVENT_BLANK)
-		return 0;
-
-	if (evdata && evdata->data) {
-		blank = evdata->data;
-		switch (*blank) {
-		case FB_BLANK_POWERDOWN:
-			screen_on = false;
-			break;
-		case FB_BLANK_UNBLANK:
-			screen_on = true;
-			// Disable deepest state immidiately after unblank
-			if (cluster_deepest_state_auto)
-				cluster_use_deepest_state = false;
-			break;
-		}
-	}
-
-	if (cluster_deepest_state_auto && !delayed_work_busy(&enforce_deepest_state_work) && !screen_on)
-		queue_delayed_work(enforce_deepest_state_wq, &enforce_deepest_state_work,
-			msecs_to_jiffies(cluster_deepest_state_auto_timeout));
-
-	return 0;
-}
-
-static struct notifier_block deepest_state_notifier_block = {
-	.notifier_call = fb_notifier_callback,
-};
-
-static void set_deepest_state(struct work_struct *work)
-{
-	cluster_use_deepest_state = !screen_on;
-}
-
 static const struct platform_suspend_ops lpm_suspend_ops = {
 	.enter = lpm_suspend_enter,
 	.valid = suspend_valid_only_mem,
@@ -1792,8 +1666,6 @@ static int lpm_probe(struct platform_device *pdev)
 	hrtimer_init(&lpm_hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	for_each_possible_cpu(cpu) {
 		cpu_histtimer = &per_cpu(histtimer, cpu);
-		hrtimer_init(cpu_histtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-		cpu_histtimer = &per_cpu(biastimer, cpu);
 		hrtimer_init(cpu_histtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	}
 
@@ -1872,21 +1744,4 @@ static int __init lpm_levels_module_init(void)
 
 	return rc;
 }
-
-static int  __init scheduled_cluster_deepest_state_init(void)
-{
-	enforce_deepest_state_wq = create_freezable_workqueue("enforce_deepest_state_wq");
-
-	if (!enforce_deepest_state_wq)
-		return -EFAULT;
-
-	INIT_DELAYED_WORK(&enforce_deepest_state_work, set_deepest_state);
-
-	fb_register_client(&deepest_state_notifier_block);
-
-	return 0;
-}
-
-late_initcall(scheduled_cluster_deepest_state_init);
-
 late_initcall(lpm_levels_module_init);

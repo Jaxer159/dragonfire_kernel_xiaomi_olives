@@ -60,7 +60,6 @@
  * operations the card has to perform.
  */
 #define MMC_BKOPS_MAX_TIMEOUT	(4 * 60 * 1000) /* max time to wait in ms */
-#define MMC_CACHE_DISBALE_TIMEOUT_MS 180000 /* msec */
 
 /* The max erase timeout, used when host->max_busy_timeout isn't specified */
 #define MMC_ERASE_TIMEOUT_MS	(60 * 1000) /* 60 s */
@@ -552,28 +551,24 @@ static int mmc_devfreq_set_target(struct device *dev,
 	pr_debug("%s: target freq = %lu (%s)\n", mmc_hostname(host),
 		*freq, current->comm);
 
-	if ((clk_scaling->curr_freq == *freq) ||
-		clk_scaling->skip_clk_scale_freq_update)
-		goto out;
-
-	/* No need to scale the clocks if they are gated */
-	if (!host->ios.clock)
-		goto out;
-
 	spin_lock_bh(&clk_scaling->lock);
-	if (clk_scaling->clk_scaling_in_progress) {
-		pr_debug("%s: clocks scaling is already in-progress by mmc thread\n",
-			mmc_hostname(host));
+	if (clk_scaling->target_freq == *freq ||
+		clk_scaling->skip_clk_scale_freq_update) {
 		spin_unlock_bh(&clk_scaling->lock);
 		goto out;
 	}
+
 	clk_scaling->need_freq_change = true;
 	clk_scaling->target_freq = *freq;
 	clk_scaling->state = *freq < clk_scaling->curr_freq ?
 		MMC_LOAD_LOW : MMC_LOAD_HIGH;
 	spin_unlock_bh(&clk_scaling->lock);
 
-	abort = __mmc_claim_host(host, &clk_scaling->devfreq_abort);
+	if (!clk_scaling->is_suspended && host->ios.clock)
+		abort = __mmc_claim_host(host, &clk_scaling->devfreq_abort);
+	else
+		goto out;
+
 	if (abort)
 		goto out;
 
@@ -617,6 +612,7 @@ void mmc_deferred_scaling(struct mmc_host *host, unsigned long timeout)
 {
 	unsigned long target_freq;
 	int err;
+	struct mmc_devfeq_clk_scaling clk_scaling;
 
 	if (!host->clk_scaling.enable)
 		return;
@@ -626,8 +622,7 @@ void mmc_deferred_scaling(struct mmc_host *host, unsigned long timeout)
 
 	spin_lock_bh(&host->clk_scaling.lock);
 
-	if (host->clk_scaling.clk_scaling_in_progress ||
-		!(host->clk_scaling.need_freq_change)) {
+	if (!host->clk_scaling.need_freq_change) {
 		spin_unlock_bh(&host->clk_scaling.lock);
 		return;
 	}
@@ -635,7 +630,12 @@ void mmc_deferred_scaling(struct mmc_host *host, unsigned long timeout)
 
 	atomic_inc(&host->clk_scaling.devfreq_abort);
 	target_freq = host->clk_scaling.target_freq;
-	host->clk_scaling.clk_scaling_in_progress = true;
+	/*
+	 * Store the clock scaling state while the lock is acquired so that
+	 * if devfreq context modifies clk_scaling, it will get reflected only
+	 * in the next deferred scaling check.
+	 */
+	clk_scaling = host->clk_scaling;
 	host->clk_scaling.need_freq_change = false;
 	spin_unlock_bh(&host->clk_scaling.lock);
 	pr_debug("%s: doing deferred frequency change (%lu) (%s)\n",
@@ -643,7 +643,7 @@ void mmc_deferred_scaling(struct mmc_host *host, unsigned long timeout)
 				target_freq, current->comm);
 
 	err = mmc_clk_update_freq(host, target_freq,
-		host->clk_scaling.state, timeout);
+		clk_scaling.state, timeout);
 	if (err && err != -EAGAIN) {
 		pr_err("%s: failed on deferred scale clocks (%d)\n",
 			mmc_hostname(host), err);
@@ -653,7 +653,6 @@ void mmc_deferred_scaling(struct mmc_host *host, unsigned long timeout)
 			mmc_hostname(host),
 			target_freq, current->comm);
 	}
-	host->clk_scaling.clk_scaling_in_progress = false;
 	atomic_dec(&host->clk_scaling.devfreq_abort);
 }
 EXPORT_SYMBOL(mmc_deferred_scaling);
@@ -783,7 +782,6 @@ int mmc_init_clk_scaling(struct mmc_host *host)
 	spin_lock_init(&host->clk_scaling.lock);
 	atomic_set(&host->clk_scaling.devfreq_abort, 0);
 	host->clk_scaling.curr_freq = host->ios.clock;
-	host->clk_scaling.clk_scaling_in_progress = false;
 	host->clk_scaling.need_freq_change = false;
 	host->clk_scaling.is_busy_started = false;
 
@@ -854,7 +852,8 @@ int mmc_suspend_clk_scaling(struct mmc_host *host)
 		return -EINVAL;
 	}
 
-	if (!mmc_can_scale_clk(host) || !host->clk_scaling.enable)
+	if (!mmc_can_scale_clk(host) || !host->clk_scaling.enable ||
+			host->clk_scaling.is_suspended)
 		return 0;
 
 	if (!host->clk_scaling.devfreq) {
@@ -871,7 +870,7 @@ int mmc_suspend_clk_scaling(struct mmc_host *host)
 			mmc_hostname(host), __func__);
 		return err;
 	}
-	host->clk_scaling.enable = false;
+	host->clk_scaling.is_suspended = true;
 
 	host->clk_scaling.total_busy_time_us = 0;
 
@@ -925,15 +924,12 @@ int mmc_resume_clk_scaling(struct mmc_host *host)
 	if (host->ios.clock < host->clk_scaling.freq_table[max_clk_idx])
 		host->clk_scaling.curr_freq = devfreq_min_clk;
 
-	host->clk_scaling.clk_scaling_in_progress = false;
-	host->clk_scaling.need_freq_change = false;
-
 	err = devfreq_resume_device(host->clk_scaling.devfreq);
 	if (err) {
 		pr_err("%s: %s: failed to resume devfreq (%d)\n",
 			mmc_hostname(host), __func__, err);
 	} else {
-		host->clk_scaling.enable = true;
+		host->clk_scaling.is_suspended = false;
 		pr_debug("%s: devfreq resumed\n", mmc_hostname(host));
 	}
 
@@ -3167,7 +3163,7 @@ int mmc_set_signal_voltage(struct mmc_host *host, int signal_voltage, u32 ocr)
 	mmc_host_clk_hold(host);
 	err = mmc_wait_for_cmd(host, &cmd, 0);
 	if (err)
-		goto err_command;
+		goto power_cycle;
 
 	if (!mmc_host_is_spi(host) && (cmd.resp[0] & R1_ERROR)) {
 		err = -EIO;
@@ -3439,7 +3435,7 @@ int mmc_resume_bus(struct mmc_host *host)
 		card_present = host->ops->get_cd(host);
 		if (!card_present) {
 			pr_err("%s: Card removed - card_present:%d\n",
-			mmc_hostname(host), card_present);
+			       mmc_hostname(host), card_present);
 			mmc_card_set_removed(host->card);
 		}
 	}
@@ -3448,16 +3444,19 @@ int mmc_resume_bus(struct mmc_host *host)
 		mmc_power_up(host, host->card->ocr);
 		BUG_ON(!host->bus_ops->resume);
 		err = host->bus_ops->resume(host);
-		if (err && (err != -ENOMEDIUM)) {
-			pr_err("%s: bus resume: failed: %d\n",
-			       mmc_hostname(host), err);
-			err = mmc_hw_reset(host);
-			if (err) {
-				pr_err("%s: reset: failed: %d\n",
-				       mmc_hostname(host), err);
-				goto err_reset;
-			} else {
-				mmc_card_clr_suspended(host->card);
+		if (err) {
+			pr_err("%s: %s: resume failed: %d\n",
+				       mmc_hostname(host), __func__, err);
+			/*
+			 * If we have cd-gpio based detection mechanism and
+			 * deferred resume is supported, we will not detect
+			 * card removal event when system is suspended. So if
+			 * resume fails after a system suspend/resume,
+			 * schedule the work to detect card presence.
+			 */
+			if (mmc_card_is_removable(host) &&
+					!(host->caps & MMC_CAP_NEEDS_POLL)) {
+				mmc_detect_change(host, 0);
 			}
 		}
 		if (mmc_card_cmdq(host->card)) {
@@ -3465,13 +3464,14 @@ int mmc_resume_bus(struct mmc_host *host)
 			if (err)
 				pr_err("%s: %s: unhalt failed: %d\n",
 				       mmc_hostname(host), __func__, err);
+			else
+				mmc_card_clr_suspended(host->card);
 		}
 	}
 
-err_reset:
 	mmc_bus_put(host);
 	pr_debug("%s: Deferred resume completed\n", mmc_hostname(host));
-	return err;
+	return 0;
 }
 EXPORT_SYMBOL(mmc_resume_bus);
 
@@ -4757,54 +4757,6 @@ int mmc_flush_cache(struct mmc_card *card)
 }
 EXPORT_SYMBOL(mmc_flush_cache);
 
-/*
- * Turn the cache ON/OFF.
- * Turning the cache OFF shall trigger flushing of the data
- * to the non-volatile storage.
- * This function should be called with host claimed
- */
-int mmc_cache_ctrl(struct mmc_host *host, u8 enable)
-{
-	struct mmc_card *card = host->card;
-	unsigned int timeout = card->ext_csd.generic_cmd6_time;
-	int err = 0, rc;
-
-	if (mmc_card_is_removable(host) ||
-			(card->quirks & MMC_QUIRK_CACHE_DISABLE))
-		return err;
-
-	if (card && mmc_card_mmc(card) &&
-			(card->ext_csd.cache_size > 0)) {
-		enable = !!enable;
-
-		if (card->ext_csd.cache_ctrl ^ enable) {
-			if (!enable)
-				timeout = MMC_CACHE_DISBALE_TIMEOUT_MS;
-
-			err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-					EXT_CSD_CACHE_CTRL, enable, 0);
-
-			if (err == -ETIMEDOUT && !enable) {
-				pr_err("%s:cache disable operation timeout\n",
-						mmc_hostname(card->host));
-				rc = mmc_interrupt_hpi(card);
-				if (rc)
-					pr_err("%s: mmc_interrupt_hpi() failed (%d)\n",
-							mmc_hostname(host), rc);
-			} else if (err) {
-				pr_err("%s: cache %s error %d\n",
-						mmc_hostname(card->host),
-						enable ? "on" : "off",
-						err);
-			} else {
-				card->ext_csd.cache_ctrl = enable;
-			}
-		}
-	}
-
-	return err;
-}
-EXPORT_SYMBOL(mmc_cache_ctrl);
 #ifdef CONFIG_PM_SLEEP
 /* Do the card removal on suspend if card is assumed removeable
  * Do that in pm notifier while userspace isn't yet frozen, so we will be able

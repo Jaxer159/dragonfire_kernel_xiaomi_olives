@@ -3,7 +3,7 @@
  * FocalTech TouchScreen driver.
  *
  * Copyright (c) 2012-2018, FocalTech Systems, Ltd., all rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -62,7 +62,9 @@
 * Global variable or extern global variabls/functions
 *****************************************************************************/
 struct fts_ts_data *fts_data;
+#ifdef CONFIG_TOUCHSCREEN_GOODIX_GT1X
 extern u8 goodix_flag;
+#endif
 /*****************************************************************************
 * Static function prototypes
 *****************************************************************************/
@@ -982,7 +984,7 @@ static int fts_irq_registration(struct fts_ts_data *ts_data)
 		pdata->irq_gpio_flags = IRQF_TRIGGER_FALLING;
 	FTS_INFO("irq flag:%x", pdata->irq_gpio_flags);
 	ret = request_threaded_irq(ts_data->irq, NULL, fts_ts_interrupt,
-							   pdata->irq_gpio_flags | IRQF_ONESHOT | IRQF_PERF_CRITICAL,
+							   pdata->irq_gpio_flags | IRQF_ONESHOT,
 							   ts_data->client->name, ts_data);
 
 	return ret;
@@ -1402,11 +1404,12 @@ static int fts_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 	struct fts_ts_data *ts_data;
 
 	FTS_FUNC_ENTER();
-
+#ifdef CONFIG_TOUCHSCREEN_GOODIX_GT1X
 	if (goodix_flag == 1) {
 		FTS_ERROR("The current ic is goodix!!!");
 		return -ENODEV;
 	}
+#endif
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		FTS_ERROR("I2C not supported");
 		return -ENODEV;
@@ -1701,13 +1704,7 @@ static int fts_ts_remove(struct i2c_client *client)
 	return 0;
 }
 
-//#ifdef CONFIG_PM
-static const struct dev_pm_ops fts_ts_pm_ops = {
-	.suspend = fts_ts_suspend,
-	.resume = fts_ts_resume,
-};
 
-//#endif
 
 /*****************************************************************************
 *  Name: fts_ts_suspend
@@ -1842,9 +1839,6 @@ static struct i2c_driver fts_ts_driver = {
 		.name = FTS_DRIVER_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = fts_match_table,
-//#ifdef CONFIG_PM
-		.pm = &fts_ts_pm_ops,
-//#endif
 
 	},
 	.id_table = fts_ts_id,

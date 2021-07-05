@@ -2,7 +2,7 @@
  * TI LMU (Lighting Management Unit) Backlight Driver
  *
  * Copyright 2016 Texas Instruments
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: Milo Kim <milo.kim@ti.com>
  *
@@ -242,8 +242,8 @@ static int ti_lmu_backlight_enable(struct ti_lmu_bl *lmu_bl, int enable)
 	struct regmap *regmap = chip->lmu->regmap;
 	unsigned long enable_time = chip->cfg->reginfo->enable_usec;
 	u8 *reg = chip->cfg->reginfo->enable;
-
-
+	//u8 offset = chip->cfg->reginfo->enable_offset;
+	//u8 mask = BIT(lmu_bl->bank_id) << offset;
 
 	if (!reg)
 		return -EINVAL;
@@ -700,9 +700,9 @@ static int ti_lmu_backlight_configure(struct ti_lmu_bl *lmu_bl)
 {
 	int ret;
 
-
-
-
+	//ret = ti_lmu_backlight_create_channel(lmu_bl);
+	//if (ret)
+	//	return ret;
 
 	ret = ti_lmu_backlight_update_ctrl_mode(lmu_bl);
 	if (ret)
@@ -714,9 +714,9 @@ static int ti_lmu_backlight_configure(struct ti_lmu_bl *lmu_bl)
 static int ti_lmu_backlight_init(struct ti_lmu_bl_chip *chip)
 {
 	struct regmap *regmap = chip->lmu->regmap;
-
-
-
+	//u32 *reg = chip->cfg->reginfo->init;
+	//int num_init = chip->cfg->reginfo->num_init;
+	//int i, ret;
 	pr_err("[bkl] %s enter\n", __func__);
 	/*
 	 * 'init' register data consists of address, mask, value.
@@ -850,7 +850,7 @@ ti_lmu_backlight_register(struct device *dev, struct ti_lmu *lmu,
 			return ERR_PTR(ret);
 		}*/
 
-
+		//backlight_update_status(each->bl_dev);
 	}
 
 	ret = ti_lmu_backlight_init(chip);
@@ -906,10 +906,10 @@ static int ti_lmu_backlight_probe(struct platform_device *pdev)
 	pr_err("[bkl] %s enter\n", __func__);
 
 	/* set PM439_GPIO4 output ,HIGH and enable */
-
-
-
-
+	//spmi_register_write(0xC340,0x11);
+	//spmi_register_write(0xC346,0x80);
+	//writel_relaxed(0x11,0xC340);
+	//writel_relaxed(0x80,0xC346);
 
 	chip = ti_lmu_backlight_register(dev, lmu, &lmu_bl_cfg[pdev->id]);
 	if (IS_ERR(chip))

@@ -72,16 +72,6 @@ int suid_dumpable = 0;
 static LIST_HEAD(formats);
 static DEFINE_RWLOCK(binfmt_lock);
 
-#define ZYGOTE32_BIN "/system/bin/app_process32"
-#define ZYGOTE64_BIN "/system/bin/app_process64"
-static struct task_struct *zygote32_task;
-static struct task_struct *zygote64_task;
-
-bool task_is_zygote(struct task_struct *task)
-{
-	return task == zygote32_task || task == zygote64_task;
-}
-
 void __register_binfmt(struct linux_binfmt * fmt, int insert)
 {
 	BUG_ON(!fmt);
@@ -1796,14 +1786,11 @@ static int do_execveat_common(int fd, struct filename *filename,
 	/* exec_binprm can release file and it may be freed */
 	is_su = d_is_su(file->f_path.dentry);
 
-	/* exec_binprm can release file and it may be freed */
-	is_su = d_is_su(file->f_path.dentry);
-
 	retval = exec_binprm(bprm);
 	if (retval < 0)
 		goto out;
 
-	if (d_is_su(file->f_path.dentry) && capable(CAP_SYS_ADMIN)) {
+	if (is_su && capable(CAP_SYS_ADMIN)) {
 		current->flags |= PF_SU;
 		su_exec();
 	}

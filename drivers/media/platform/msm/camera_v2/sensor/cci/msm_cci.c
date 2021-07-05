@@ -1,5 +1,5 @@
 /* Copyright (c) 2012-2017, 2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,6 +24,7 @@
 #include "msm_camera_io_util.h"
 #include "msm_camera_dt_util.h"
 #include "cam_hw_ops.h"
+#include <media/adsp-shmem-device.h>
 
 #define V4L2_IDENT_CCI 50005
 #define CCI_I2C_QUEUE_0_SIZE 64
@@ -1430,11 +1431,14 @@ static int32_t msm_cci_init(struct v4l2_subdev *sd,
 	}
 
 	/* Re-initialize the completion */
-	reinit_completion(&cci_dev->cci_master_info[master].reset_complete);
+	reinit_completion(&cci_dev->cci_master_info[MASTER_0].reset_complete);
 	for (i = 0; i < NUM_QUEUES; i++)
-		reinit_completion(&cci_dev->cci_master_info[master].
-			report_q[i]);
+		 reinit_completion(&cci_dev->cci_master_info[MASTER_0].report_q[i]);
+	reinit_completion(&cci_dev->cci_master_info[MASTER_1].reset_complete);
+	for (i = 0; i < NUM_QUEUES; i++)
+		reinit_completion(&cci_dev->cci_master_info[MASTER_1].report_q[i]);
 	rc = msm_camera_enable_irq(cci_dev->irq, true);
+
 	if (rc < 0)
 		pr_err("%s: irq enable failed\n", __func__);
 	cci_dev->hw_version = msm_camera_io_r_mb(cci_dev->base +
@@ -1476,6 +1480,14 @@ static int32_t msm_cci_init(struct v4l2_subdev *sd,
 				cci_dev->cci_i2c_queue_info[i][j].
 				max_queue_size);
 		}
+	}
+
+
+	if (cci_dev->pdev->id == ADSP_CCI
+	&& adsp_shmem_get_state() != CAMERA_STATUS_END) {
+		/* Used by aDSP */
+		cci_dev->cci_state = CCI_STATE_ENABLED;
+		return 0;
 	}
 
 	cci_dev->cci_master_info[MASTER_0].reset_pending = TRUE;

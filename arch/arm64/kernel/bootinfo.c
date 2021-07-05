@@ -2,7 +2,7 @@
  * bootinfo.c
  *
  * Copyright (C) 2011 Xiaomi Ltd.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -133,7 +133,7 @@ static ssize_t powerup_reason_show(struct kobject *kobj, struct kobj_attribute *
 		reset_reason_index = find_first_bit((unsigned long *)&reset_reason,
 			sizeof(reset_reason)*BITS_PER_BYTE);
 		if (reset_reason_index < RS_REASON_MAX && reset_reason_index >= 0) {
-			if (pu_reason == 0x80021) {
+			if ((pu_reason == 0x80021) || (pu_reason == 0x80121)) {
 				s += snprintf(s, strlen(reset_reasons[reset_reason_index]) + 2,
 				       "%s\n", reset_reasons[RS_REASON_EVENT_NORMAL]);
 				printk(KERN_DEBUG "%s: rs_reason [0x%x], first non-zero bit"

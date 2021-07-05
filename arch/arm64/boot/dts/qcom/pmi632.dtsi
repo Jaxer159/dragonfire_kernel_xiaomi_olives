@@ -1,5 +1,5 @@
-/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -314,6 +314,7 @@
 			#cooling-cells = <2>;
 			qcom,chg-term-src = <1>;
 			qcom,chg-term-current-ma = <(-200)>;
+			qcom,float-option = <1>;
 
 			qcom,pmic-revid = <&pmi632_revid>;
 			dpdm-supply = <&qusb_phy>;
@@ -326,7 +327,7 @@
 			qcom,hw-die-temp-mitigation;
 			qcom,hw-connector-mitigation;
 			qcom,connector-internal-pull-kohm = <100>;
-
+			qcom,fv-max-uv = <4400000>;
 			qcom,thermal-mitigation
 				= <3000000 2500000 2000000 1500000
 					1000000 500000>;
@@ -767,6 +768,7 @@
 		polling-delay = <0>;
 		thermal-governor = "step_wise";
 		thermal-sensors = <&bcl_sensor 0>;
+		wake-capable-sensor;
 
 		trips {
 			pmi632_ibat_lvl0: ibat-lvl0 {
@@ -782,6 +784,7 @@
 		polling-delay = <0>;
 		thermal-governor = "step_wise";
 		thermal-sensors = <&bcl_sensor 1>;
+		wake-capable-sensor;
 
 		trips {
 			ibat-lvl1 {
@@ -797,6 +800,7 @@
 		polling-delay = <0>;
 		thermal-governor = "low_limits_cap";
 		thermal-sensors = <&bcl_sensor 2>;
+		wake-capable-sensor;
 		tracks-low;
 
 		trips {
@@ -813,6 +817,7 @@
 		polling-delay = <0>;
 		thermal-governor = "low_limits_cap";
 		thermal-sensors = <&bcl_sensor 3>;
+		wake-capable-sensor;
 		tracks-low;
 
 		trips {
@@ -829,6 +834,7 @@
 		polling-delay = <0>;
 		thermal-governor = "low_limits_cap";
 		thermal-sensors = <&bcl_sensor 4>;
+		wake-capable-sensor;
 		tracks-low;
 
 		trips {
@@ -845,6 +851,7 @@
 		polling-delay = <0>;
 		thermal-governor = "low_limits_cap";
 		thermal-sensors = <&bcl_soc>;
+		wake-capable-sensor;
 		tracks-low;
 
 		trips {
@@ -861,6 +868,7 @@
 		polling-delay = <0>;
 		thermal-governor = "step_wise";
 		thermal-sensors = <&pmi632_tz>;
+		wake-capable-sensor;
 
 		trips {
 			pmi632_tz_trip0: pmi632-trip0 {

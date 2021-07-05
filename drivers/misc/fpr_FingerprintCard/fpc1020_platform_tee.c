@@ -18,7 +18,7 @@
  *
  *
  * Copyright (c) 2015 Fingerprint Cards AB <tech@fingerprints.com>
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License Version 2
@@ -478,7 +478,7 @@ static ssize_t compatible_all_set(struct device *dev,
 	int irqf;
 	struct  fpc1020_data *fpc1020 = dev_get_drvdata(dev);
 	dev_err(dev, "compatible all enter %d\n", fpc1020->compatible_enabled);
-	if(!strncmp(buf, "enable", strlen("enable")) && fpc1020->compatible_enabled != 1){
+	if (!strncmp(buf, "enable", strlen("enable")) && fpc1020->compatible_enabled != 1) {
 		rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_irq",
 			&fpc1020->irq_gpio);
 		if (rc)
@@ -520,7 +520,7 @@ static ssize_t compatible_all_set(struct device *dev,
 		rc = select_pin_ctl(fpc1020, "fpc1020_irq_active");
 		if (rc)
 			goto exit;
-		irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT | IRQF_PERF_CRITICAL;
+		irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
 		if (of_property_read_bool(dev->of_node, "fpc,enable-wakeup")) {
 			irqf |= IRQF_NO_SUSPEND;
 			device_init_wakeup(dev, 1);
@@ -545,14 +545,12 @@ static ssize_t compatible_all_set(struct device *dev,
 		(void)set_clks(fpc1020, false);
 #endif
 	}
-	}else if(!strncmp(buf, "disable", strlen("disable")) && fpc1020->compatible_enabled != 0){
-		if (gpio_is_valid(fpc1020->irq_gpio))
-		{
+	} else if (!strncmp(buf, "disable", strlen("disable")) && fpc1020->compatible_enabled != 0) {
+		if (gpio_is_valid(fpc1020->irq_gpio)) {
 			devm_gpio_free(dev, fpc1020->irq_gpio);
 			pr_info("remove irq_gpio success\n");
 		}
-		if (gpio_is_valid(fpc1020->rst_gpio))
-		{
+		if (gpio_is_valid(fpc1020->rst_gpio)) {
 			devm_gpio_free(dev, fpc1020->rst_gpio);
 			pr_info("remove rst_gpio success\n");
 		}

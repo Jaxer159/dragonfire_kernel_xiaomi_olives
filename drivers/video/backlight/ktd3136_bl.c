@@ -21,6 +21,10 @@
 #include <linux/device.h>
 #include <linux/platform_device.h>
 
+#ifdef CONFIG_XIAOMI_SDM439
+#include <linux/sdm439.h>
+#endif
+
 struct ktd3137_chip *bkl_chip;
 
 #define KTD_DEBUG
@@ -106,7 +110,7 @@ static int ktd3137_read_reg(struct i2c_client *client, int reg, u8 *val)
 
 	*val = ret;
 
-
+	//LOG_DBG("Reading 0x%02x=0x%02x\n", reg, *val);
 	return ret;
 }
 
@@ -150,7 +154,7 @@ static void ktd_parse_dt(struct device *dev, struct ktd3137_chip *chip)
 
 	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
-		return;
+		return;// -ENOMEM;
 
 	pdata->hwen_gpio = of_get_named_gpio(np, "ktd,hwen-gpio", 0);
 	LOG_DBG("hwen --<%d>\n", pdata->hwen_gpio);
@@ -292,7 +296,7 @@ static int ktd3137_bl_enable_channel(struct ktd3137_chip *chip)
 	struct ktd3137_bl_pdata *pdata = chip->pdata;
 
 	if (pdata->channel == 0) {
-
+		//default value for mode Register, all channel disabled.
 		LOG_DBG("all channels are going to be disabled\n");
 		ret = ktd3137_write_reg(chip->client, REG_PWM, 0x18);
 	} else if (pdata->channel == 3) {
@@ -340,7 +344,7 @@ static void ktd3137_ramp_setting(struct ktd3137_chip *chip)
 	unsigned int max_time = 16384;
 	int temp = 0;
 
-	if (pdata->ramp_on_time == 0) {
+	if (pdata->ramp_on_time == 0) {//512us
 		ktd3137_masked_write(chip->client, REG_RAMP_ON, 0xf0, 0x00);
 		LOG_DBG("rampon time is 0\n");
 	} else if (pdata->ramp_on_time > max_time) {
@@ -352,7 +356,7 @@ static void ktd3137_ramp_setting(struct ktd3137_chip *chip)
 		LOG_DBG("temp is %d\n", temp);
 	}
 
-	if (pdata->ramp_off_time == 0) {
+	if (pdata->ramp_off_time == 0) {//512us
 		ktd3137_masked_write(chip->client, REG_RAMP_ON, 0x0f, 0x00);
 		LOG_DBG("rampoff time is 0\n");
 	} else if (pdata->ramp_off_time > max_time) {
@@ -405,7 +409,7 @@ static void ktd3137_flash_brightness_set(struct led_classdev *cdev,
 	chip = container_of(cdev, struct ktd3137_chip, cdev_flash);
 
 	cancel_delayed_work_sync(&chip->work);
-	if (!brightness)
+	if (!brightness) // flash off
 		return;
 	else if (brightness > 15)
 		brightness = 0x0f;
@@ -429,7 +433,7 @@ static void ktd3137_flash_brightness_set(struct led_classdev *cdev,
 static int ktd3137_flashled_init(struct i2c_client *client,
 				struct ktd3137_chip *chip)
 {
-
+	//struct ktd3137_bl_pdata *pdata = chip->pdata;
 	int ret;
 
 	chip->cdev_flash.name = "ktd3137_flash";
@@ -504,7 +508,7 @@ static void ktd3137_check_status(struct ktd3137_chip *chip)
 		}
 
 	}
-	return ;
+	return ;//value;
 }
 
 static int ktd3137_gpio_init(struct ktd3137_chip *chip)
@@ -573,7 +577,7 @@ void ktd3137_brightness_set_workfunc(struct ktd3137_chip *chip, int brightness)
 	}
 
 	if (pdata->linear_backlight == 1) {
-		ktd3137_masked_write(chip->client, REG_CONTROL, 0x02, 0x02);
+		ktd3137_masked_write(chip->client, REG_CONTROL, 0x02, 0x02);// set linear mode
 	}
 
 	if (pdata->pwm_mode) {
@@ -630,20 +634,37 @@ int ktd_hbm_set(enum backlight_hbm_mode hbm_mode)
 	return 0;
 }
 
-#if defined(CONFIG_PROJECT_OLIVE) || defined(CONFIG_PROJECT_OLIVELITE) || defined(CONFIG_PROJECT_OLIVEWOOD)
+#if defined(CONFIG_PROJECT_OLIVES) || defined(CONFIG_XIAOMI_SDM439)
 #define LOWEST_BRIGHTNESS          8
 #endif
 
 int ktd3137_brightness_set(int brightness)
 {
 	LOG_DBG("%s brightness = %d\n", __func__, brightness);
-#if defined(CONFIG_PROJECT_OLIVE) || defined(CONFIG_PROJECT_OLIVELITE) || defined(CONFIG_PROJECT_OLIVEWOOD)
+#ifdef CONFIG_XIAOMI_SDM439
+    if (sdm439_current_device == XIAOMI_OLIVES) {
+        if ((brightness > 0) && (brightness <= LOWEST_BRIGHTNESS)) {
+            brightness = LOWEST_BRIGHTNESS;
+        };
+        switch (brightness) {
+        case LOWEST_BRIGHTNESS:
+            brightness = brightness - 1;
+            LOG_DBG("%s The lowest brightness = %d\n", __func__, brightness);
+            break;
+        }
+    }
+#else
+#ifdef CONFIG_PROJECT_OLIVES
+	if ((brightness > 0) && (brightness <= LOWEST_BRIGHTNESS)) {
+		brightness = LOWEST_BRIGHTNESS;
+	};
 	switch (brightness) {
 	case LOWEST_BRIGHTNESS:
 		brightness = brightness - 1;
 		LOG_DBG("%s The lowest brightness = %d\n", __func__, brightness);
 		break;
 	}
+#endif
 #endif
 	ktd3137_brightness_set_workfunc(bkl_chip, brightness);
 	return brightness;
@@ -953,10 +974,10 @@ static void ktd3137_sync_backlight_work(struct work_struct *work)
 	chip = container_of(work, struct ktd3137_chip, work.work);
 
 	ktd3137_read_reg(chip->client, REG_FLASH_SETTING, &value);
-
+	//LOG_DBG("flash setting register --<0x%x>\n", value);
 
 	ktd3137_read_reg(chip->client, REG_MODE, &value);
-
+	//LOG_DBG("mode register --<0x%x>\n", value);
 
 	ktd3137_check_status(chip);
 }
@@ -1024,7 +1045,7 @@ static int ktd3137_probe(struct i2c_client *client,
 
 	struct ktd3137_bl_pdata *pdata = dev_get_drvdata(&client->dev);
 	struct ktd3137_chip *chip;
-
+	//struct device_node *np = client->dev.of_node;
 	extern char *saved_command_line;
 	int bkl_id = 0;
 	char *bkl_ptr = (char *)strnstr(saved_command_line, ":bklic=", strlen(saved_command_line));
@@ -1045,7 +1066,7 @@ static int ktd3137_probe(struct i2c_client *client,
 		goto exit0;
 	}
 
-
+	//ktd3137_client = client;
 
 	chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
 	if (!chip) {
@@ -1085,7 +1106,7 @@ static int ktd3137_probe(struct i2c_client *client,
 	ktd3137_read_reg(chip->client, 0x07, &value);
 	ktd3137_read_reg(chip->client, 0x08, &value);
 	ktd3137_read_reg(chip->client, 0x0A, &value);
-
+	//backlight_update_status(chip->bl);
 	bkl_chip = chip;
 exit0:
 	return err;

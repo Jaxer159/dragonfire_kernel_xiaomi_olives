@@ -1,5 +1,5 @@
 /* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -19,6 +19,7 @@
 #include <linux/err.h>
 #include <linux/qpnp/qpnp-revid.h>
 #include <linux/of.h>
+
 #define REVID_REVISION1	0x0
 #define REVID_REVISION2	0x1
 #define REVID_REVISION3	0x2
@@ -168,6 +169,7 @@ static int qpnp_revid_probe(struct platform_device *pdev)
 	int rc, fab_id, tp_rev;
 	struct revid_chip *revid_chip;
 	struct regmap *regmap;
+
 	regmap = dev_get_regmap(pdev->dev.parent, NULL);
 	if (!regmap) {
 		dev_err(&pdev->dev, "Couldn't get parent's regmap\n");
@@ -244,6 +246,7 @@ static int qpnp_revid_probe(struct platform_device *pdev)
 	option2 = (pmic_status >> 2) & 0x3;
 	option3 = (pmic_status >> 4) & 0x3;
 	option4 = (pmic_status >> 6) & 0x3;
+
 	build_pmic_string(hq_pmic_string, PMIC_STRING_MAXLENGTH,
 			  to_spmi_device(pdev->dev.parent)->usid,
 			pmic_subtype, rev1, rev2, rev3, rev4);

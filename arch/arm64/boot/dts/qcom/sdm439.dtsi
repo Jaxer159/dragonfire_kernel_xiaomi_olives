@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -257,11 +257,14 @@
 		alignment = <0 0x400000>;
 		size = <0 0x800000>;
 	};
-
-	pstore_reserve_mem: pstore_reserve_mem_region@0 {
-		compatible = "removed-dma-pool";
-		no-map;
-		reg = <0x0 0x9ff00000 0x0 0x00100000>;
+	ramoops: ramoops@9ff00000 {
+		compatible = "ramoops";
+		reg = <0 0xb0000000 0 0x00400000>;
+		record-size = <0x40000>;
+		console-size = <0x40000>;
+		ftrace-size = <0x40000>;
+		pmsg-size = <0x200000>;
+		ecc-size = <0x0>;
 	};
 };
 
@@ -369,6 +372,26 @@
 		< 2016000000 6>;
 
 	qcom,speed4-bin-v0-cci =
+		<          0 0>,
+		<  400000000 1>,
+		<  533333333 3>;
+
+	qcom,speed5-bin-v0-c0 =
+		<          0 0>,
+		<  768000000 1>,
+		<  998400000 1>,
+		< 1171200000 2>,
+		< 1305600000 3>,
+		< 1459200000 5>;
+
+	qcom,speed5-bin-v0-c1=
+		<          0 0>,
+		<  960000000 1>,
+		< 1305600000 1>,
+		< 1497600000 2>,
+		< 1708800000 3>;
+
+	qcom,speed5-bin-v0-cci =
 		<          0 0>,
 		<  400000000 1>,
 		<  533333333 3>;
@@ -741,7 +764,16 @@
 };
 
 &sdhc_1 {
+	/* DLL HSR settings. Refer go/hsr - <Target> DLL settings */
+	qcom,dll-hsr-list = <0x00076400 0x0 0x0 0x0 0x00040868>;
 	qcom,ddr-config = <0x00040868>;
+
+};
+
+&sdhc_2 {
+	/* DLL HSR settings. Refer go/hsr - <Target> DLL settings */
+	qcom,dll-hsr-list = <0x00076400 0x0 0x0 0x0 0x00040868>;
+
 };
 
 &mdss_mdp {

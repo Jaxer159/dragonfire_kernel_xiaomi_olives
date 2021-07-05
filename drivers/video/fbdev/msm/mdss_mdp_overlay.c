@@ -1353,12 +1353,10 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 	struct mdss_mdp_ctl *ctl = mdp5_data->ctl;
 	struct mdss_data_type *mdata = mfd_to_mdata(mfd);
 
-	mutex_lock(&mdp5_data->ov_lock);
 	if (mdss_mdp_ctl_is_power_on(ctl)) {
 		if (!mdp5_data->mdata->batfet)
 			mdss_mdp_batfet_ctrl(mdp5_data->mdata, true);
 		mdss_mdp_release_splash_pipe(mfd);
-		mutex_unlock(&mdp5_data->ov_lock);
 		return 0;
 	} else if (mfd->panel_info->cont_splash_enabled) {
 		if (mdp5_data->allow_kickoff) {
@@ -1370,14 +1368,12 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 			if (rc) {
 				pr_debug("empty kickoff on fb%d during cont splash\n",
 					mfd->index);
-				mutex_unlock(&mdp5_data->ov_lock);
 				return -EPERM;
 			}
 		}
 	} else if (mdata->handoff_pending) {
 		pr_warn("fb%d: commit while splash handoff pending\n",
 				mfd->index);
-		mutex_unlock(&mdp5_data->ov_lock);
 		return -EPERM;
 	}
 
@@ -1450,7 +1446,6 @@ ctl_error:
 	mdp5_data->ctl = NULL;
 end:
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
-	mutex_unlock(&mdp5_data->ov_lock);
 	return rc;
 }
 
@@ -2877,16 +2872,17 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 		mutex_lock(ctl->shared_lock);
 	}
 
+	mutex_lock(&mdp5_data->ov_lock);
 	ctl->bw_pending = 0;
 	ret = mdss_mdp_overlay_start(mfd);
 	if (ret) {
 		pr_err("unable to start overlay %d (%d)\n", mfd->index, ret);
+		mutex_unlock(&mdp5_data->ov_lock);
 		if (ctl->shared_lock)
 			mutex_unlock(ctl->shared_lock);
 		return ret;
 	}
 
-	mutex_lock(&mdp5_data->ov_lock);
 	ret = mdss_iommu_ctrl(1);
 	if (IS_ERR_VALUE((unsigned long)ret)) {
 		pr_err("iommu attach failed rc=%d\n", ret);
@@ -3440,9 +3436,7 @@ static void mdss_mdp_overlay_pan_display(struct msm_fb_data_type *mfd)
 		goto pipe_release;
 	}
 
-	mutex_unlock(&mdp5_data->ov_lock);
 	ret = mdss_mdp_overlay_start(mfd);
-	mutex_lock(&mdp5_data->ov_lock);
 	if (ret) {
 		pr_err("unable to start overlay %d (%d)\n", mfd->index, ret);
 		goto clk_disable;
@@ -6457,7 +6451,7 @@ static int __vsync_retire_setup(struct msm_fb_data_type *mfd)
 		kthread_init_work(&mdp5_data->vsync_work,
 			__vsync_retire_work_handler);
 
-		mdp5_data->thread = kthread_run_perf_critical(kthread_worker_fn,
+		mdp5_data->thread = kthread_run(kthread_worker_fn,
 					&mdp5_data->worker,
 					"vsync_retire_work");
 		if (IS_ERR(mdp5_data->thread)) {
@@ -6572,6 +6566,13 @@ static void mdss_mdp_signal_retire_fence(struct msm_fb_data_type *mfd,
 	pr_debug("Signaled (%d) pending retire fence\n", retire_cnt);
 }
 
+static bool mdss_mdp_is_twm_en(void)
+{
+	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
+
+	return (mdata && mdata->twm_en);
+}
+
 int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 {
 	struct device *dev = mfd->fbi->dev;
@@ -6619,7 +6620,7 @@ int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 	mdp5_interface->configure_panel = mdss_mdp_update_panel_info;
 	mdp5_interface->input_event_handler = mdss_mdp_input_event_handler;
 	mdp5_interface->signal_retire_fence = mdss_mdp_signal_retire_fence;
-	mdp5_interface->is_twm_en = NULL;
+	mdp5_interface->is_twm_en = mdss_mdp_is_twm_en;
 
 	if (mfd->panel_info->type == WRITEBACK_PANEL) {
 		mdp5_interface->atomic_validate =

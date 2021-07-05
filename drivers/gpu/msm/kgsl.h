@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -71,26 +71,17 @@
 /*
  * SCRATCH MEMORY: The scratch memory is one page worth of data that
  * is mapped into the GPU. This allows for some 'shared' data between
- * the GPU and CPU. For example, it will be used by the GPU to write
- * each updated RPTR for each RB.
+ * the GPU and CPU.
  *
  * Used Data:
  * Offset: Length(bytes): What
  * 0x0: 4 * KGSL_PRIORITY_MAX_RB_LEVELS: RB0 RPTR
- * 0x10: 8 * KGSL_PRIORITY_MAX_RB_LEVELS: RB0 CTXT RESTORE ADDR
  */
 
 /* Shadow global helpers */
 #define SCRATCH_RPTR_OFFSET(id) ((id) * sizeof(unsigned int))
 #define SCRATCH_RPTR_GPU_ADDR(dev, id) \
 	((dev)->scratch.gpuaddr + SCRATCH_RPTR_OFFSET(id))
-
-#define SCRATCH_PREEMPTION_CTXT_RESTORE_ADDR_OFFSET(id) \
-	(SCRATCH_RPTR_OFFSET(KGSL_PRIORITY_MAX_RB_LEVELS) + \
-	((id) * sizeof(uint64_t)))
-#define SCRATCH_PREEMPTION_CTXT_RESTORE_GPU_ADDR(dev, id) \
-	((dev)->scratch.gpuaddr + \
-	SCRATCH_PREEMPTION_CTXT_RESTORE_ADDR_OFFSET(id))
 
 /* Timestamp window used to detect rollovers (half of integer range) */
 #define KGSL_TIMESTAMP_WINDOW 0x80000000
@@ -158,16 +149,12 @@ struct kgsl_driver {
 		atomic_long_t secure_max;
 		atomic_long_t mapped;
 		atomic_long_t mapped_max;
-		atomic_long_t page_free_pending;
-		atomic_long_t page_alloc_pending;
 	} stats;
 	unsigned int full_cache_threshold;
 	struct workqueue_struct *workqueue;
 	struct workqueue_struct *mem_workqueue;
 	struct kthread_worker worker;
-	struct kthread_worker low_prio_worker;
 	struct task_struct *worker_thread;
-	struct task_struct *low_prio_worker_thread;
 };
 
 extern struct kgsl_driver kgsl_driver;
@@ -209,11 +196,9 @@ struct kgsl_memdesc_ops {
  * @pagetable: Pointer to the pagetable that the object is mapped in
  * @hostptr: Kernel virtual address
  * @hostptr_count: Number of threads using hostptr
- * @useraddr: User virtual address (if applicable)
  * @gpuaddr: GPU virtual address
  * @physaddr: Physical address of the memory object
  * @size: Size of the memory object
- * @mapsize: Size of memory mapped in userspace
  * @priv: Internal flags and settings
  * @sgt: Scatter gather table for allocated pages
  * @ops: Function hooks for the memdesc memory type
@@ -228,11 +213,9 @@ struct kgsl_memdesc {
 	struct kgsl_pagetable *pagetable;
 	void *hostptr;
 	unsigned int hostptr_count;
-	unsigned long useraddr;
 	uint64_t gpuaddr;
 	phys_addr_t physaddr;
 	uint64_t size;
-	uint64_t mapsize;
 	unsigned int priv;
 	struct sg_table *sgt;
 	struct kgsl_memdesc_ops *ops;
@@ -242,6 +225,11 @@ struct kgsl_memdesc {
 	struct page **pages;
 	unsigned int page_count;
 	unsigned int cur_bindings;
+	/*
+	 * @lock: Spinlock to protect the gpuaddr from being accessed by
+	 * multiple entities trying to map the same SVM region at once
+	 */
+	spinlock_t lock;
 };
 
 /*
@@ -290,6 +278,11 @@ struct kgsl_mem_entry {
 	struct work_struct work;
 	spinlock_t bind_lock;
 	struct rb_root bind_tree;
+	/*
+	 * @map_count: Count how many vmas this object is mapped in - used for
+	 * debugfs accounting
+	 */
+	atomic_t map_count;
 };
 
 struct kgsl_device_private;
@@ -297,14 +290,6 @@ struct kgsl_event_group;
 
 typedef void (*kgsl_event_func)(struct kgsl_device *, struct kgsl_event_group *,
 		void *, int);
-
-enum kgsl_priority {
-	KGSL_EVENT_REGULAR_PRIORITY = 0,
-	KGSL_EVENT_LOW_PRIORITY,
-	KGSL_EVENT_NUM_PRIORITIES
-};
-
-const char *prio_to_string(enum kgsl_priority prio);
 
 /**
  * struct kgsl_event - KGSL GPU timestamp event
@@ -327,9 +312,8 @@ struct kgsl_event {
 	void *priv;
 	struct list_head node;
 	unsigned int created;
-	struct kthread_work work;
+	struct work_struct work;
 	int result;
-	enum kgsl_priority prio;
 	struct kgsl_event_group *group;
 };
 

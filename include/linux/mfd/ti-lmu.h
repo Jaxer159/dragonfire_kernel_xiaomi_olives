@@ -2,7 +2,7 @@
  * TI LMU (Lighting Management Unit) Devices
  *
  * Copyright 2016 Texas Instruments
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: Milo Kim <milo.kim@ti.com>
  *

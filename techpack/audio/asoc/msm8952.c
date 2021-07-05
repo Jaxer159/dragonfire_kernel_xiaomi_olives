@@ -37,6 +37,10 @@
 #define MSM_INT_DIGITAL_CODEC "msm-dig-codec"
 #define PMIC_INT_ANALOG_CODEC "analog-codec"
 
+#ifdef CONFIG_XIAOMI_SDM439
+#include <linux/sdm439.h>
+#endif
+
 enum btsco_rates {
 	RATE_8KHZ_ID,
 	RATE_16KHZ_ID,
@@ -73,14 +77,23 @@ static int msm8952_mclk_event(struct snd_soc_dapm_widget *w,
 			      struct snd_kcontrol *kcontrol, int event);
 static int msm8952_wsa_switch_event(struct snd_soc_dapm_widget *w,
 			      struct snd_kcontrol *kcontrol, int event);
-#ifdef AW87519_PA
+#ifdef CONFIG_XIAOMI_SDM439
 extern unsigned char aw87519_audio_speaker(void);
 extern unsigned char aw87519_audio_receiver(void);
 extern unsigned char aw87519_audio_off(void);
 static int aw87519_spk_control = 0;
 static int aw87519_rcv_control = 0;
-static const char *const ext_speaker_amp_function[] = { "Off", "On" };
-static const char *const ext_receiver_amp_function[] = { "Off", "On" };
+extern unsigned char aw87329_audio_kspk(void);
+extern unsigned char aw87329_audio_drcv(void);
+extern unsigned char aw87329_audio_off(void);
+static int aw87329_kspk_control = 0;
+static int aw87329_drcv_control = 0;
+#elif defined AW87519_PA
+extern unsigned char aw87519_audio_speaker(void);
+extern unsigned char aw87519_audio_receiver(void);
+extern unsigned char aw87519_audio_off(void);
+static int aw87519_spk_control = 0;
+static int aw87519_rcv_control = 0;
 #elif defined AW87329_PA
 //add by 101003082 for aw87329 begin at 2018/12/18
 extern unsigned char aw87329_audio_kspk(void);
@@ -88,9 +101,9 @@ extern unsigned char aw87329_audio_drcv(void);
 extern unsigned char aw87329_audio_off(void);
 static int aw87329_kspk_control = 0;
 static int aw87329_drcv_control = 0;
-static const char *const ext_kspk_amp_function[] = { "Off", "On" };
-static const char *const ext_drcv_amp_function[] = { "Off", "On" };
 #endif
+static const char *const ext_speaker_amp_function[] = { "Off", "On" };
+static const char *const ext_receiver_amp_function[] = { "Off", "On" };
 
 /*
  * Android L spec
@@ -350,7 +363,21 @@ int is_ext_spk_gpio_support(struct platform_device *pdev,
 
 static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 {
-#ifdef AW87519_PA
+#ifdef CONFIG_XIAOMI_SDM439
+    if (sdm439_current_device == XIAOMI_OLIVES) {
+        if(enable) {
+		    aw87519_audio_speaker();
+	    } else {
+		    aw87519_audio_off();
+	    }
+    } else {
+        if(enable) {
+            aw87329_audio_kspk();
+        } else {
+            aw87329_audio_off();
+        }
+    }
+#elif defined AW87519_PA
 	if(enable) {
 		aw87519_audio_speaker();
 	} else {
@@ -397,8 +424,8 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 			return ret;
 		}
 	}
-	return 0;
 #endif
+	return 0;
 }
 
 static bool msm8952_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
@@ -1070,7 +1097,99 @@ static int msm_vi_feed_tx_ch_put(struct snd_kcontrol *kcontrol,
 	pr_debug("%s: msm_vi_feed_tx_ch = %d\n", __func__, msm_vi_feed_tx_ch);
 	return 1;
 }
-#ifdef AW87329_PA
+#ifdef CONFIG_XIAOMI_SDM439
+static int ext_sdm439_spk_amp_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+    if (sdm439_current_device == XIAOMI_PINE) {
+        ucontrol->value.integer.value[0] = aw87329_kspk_control;
+        pr_debug("%s: aw87329_kspk_control = %d\n", __func__,
+            aw87329_kspk_control);
+    } else {
+        ucontrol->value.integer.value[0] = aw87519_spk_control;
+        pr_debug("%s: aw87519_kspk_control = %d\n", __func__,
+            aw87519_spk_control);
+    }
+    return 0;
+}
+
+static int ext_sdm439_spk_amp_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+    if (sdm439_current_device == XIAOMI_PINE) {
+        if(ucontrol->value.integer.value[0] == aw87329_kspk_control){
+            return 1;
+        }
+        aw87329_kspk_control = ucontrol->value.integer.value[0];
+        if(ucontrol->value.integer.value[0]) {
+            aw87329_audio_kspk();
+        } else {
+            aw87329_audio_off();
+        }
+        pr_debug("%s: value.integer.value = %ld\n", __func__,
+            ucontrol->value.integer.value[0]);
+    } else {
+        if(ucontrol->value.integer.value[0] == aw87519_spk_control){
+            return 1;
+        }
+        aw87519_spk_control = ucontrol->value.integer.value[0];
+        if(ucontrol->value.integer.value[0]) {
+            aw87519_audio_speaker();
+        } else {
+            aw87519_audio_off();
+        }
+        pr_debug("%s: value.integer.value = %ld\n", __func__,
+            ucontrol->value.integer.value[0]);
+    }
+	return 0;
+}
+
+static int ext_sdm439_rcv_amp_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+    if (sdm439_current_device == XIAOMI_PINE) {
+        ucontrol->value.integer.value[0] = aw87329_drcv_control;
+        pr_debug("%s: aw87329_drcv_control = %d\n", __func__,
+            aw87329_drcv_control);
+    } else {
+        ucontrol->value.integer.value[0] = aw87519_rcv_control;
+        pr_debug("%s: aw87519_drcv_control = %d\n", __func__,
+            aw87519_rcv_control);
+    }
+	return 0;
+}
+
+static int ext_sdm439_rcv_amp_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+    if (sdm439_current_device == XIAOMI_PINE) {
+        aw87329_drcv_control = ucontrol->value.integer.value[0];
+        if(ucontrol->value.integer.value[0] == aw87329_drcv_control){
+            return 1;
+        }
+        if(ucontrol->value.integer.value[0]) {
+            aw87329_audio_drcv();
+        } else {
+            aw87329_audio_off();
+        }
+        pr_debug("%s: value.integer.value = %ld\n", __func__,
+            ucontrol->value.integer.value[0]);
+    } else {
+        aw87519_rcv_control = ucontrol->value.integer.value[0];
+        if(ucontrol->value.integer.value[0] == aw87519_rcv_control){
+            return 1;
+        }
+        if(ucontrol->value.integer.value[0]) {
+            aw87519_audio_receiver();
+        } else {
+            aw87519_audio_off();
+        }
+        pr_debug("%s: value.integer.value = %ld\n", __func__,
+            ucontrol->value.integer.value[0]);
+    }
+	return 0;
+}
+#elif defined AW87329_PA
 static int ext_kspk_amp_get(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
@@ -1191,19 +1310,12 @@ static const struct soc_enum msm_snd_enum[] = {
 				vi_feed_ch_text),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(mi2s_rx_sample_rate_text),
 				mi2s_rx_sample_rate_text),
-#ifdef AW87329_PA
 //add by 101003082 for aw87329 begin at 2018/12/18
-	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ext_kspk_amp_function),
-		ext_kspk_amp_function),
-	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ext_drcv_amp_function),
-		ext_drcv_amp_function),
-//add by 101003082 for aw87329 begin at 2018/12/18
-#elif defined AW87519_PA
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ext_speaker_amp_function),
 		ext_speaker_amp_function),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ext_receiver_amp_function),
 		ext_receiver_amp_function),
-#endif
+//add by 101003082 for aw87329 begin at 2018/12/18
 };
 
 static const struct snd_kcontrol_new msm_snd_controls[] = {
@@ -1223,7 +1335,12 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_vi_feed_tx_ch_get, msm_vi_feed_tx_ch_put),
 	SOC_ENUM_EXT("MI2S_RX SampleRate", msm_snd_enum[6],
 			mi2s_rx_sample_rate_get, mi2s_rx_sample_rate_put),
-#ifdef AW87329_PA
+#ifdef CONFIG_XIAOMI_SDM439
+	SOC_ENUM_EXT("Ext_Speaker_Amp", msm_snd_enum[7],
+		ext_sdm439_spk_amp_get, ext_sdm439_spk_amp_put),
+	SOC_ENUM_EXT("Ext_Receiver_Amp", msm_snd_enum[8],
+		ext_sdm439_rcv_amp_get, ext_sdm439_rcv_amp_put),
+#elif defined AW87329_PA
 //add by 101003082 for aw87329 begin at 2018/12/18
 	SOC_ENUM_EXT("Ext_Speaker_Amp", msm_snd_enum[7],
 		ext_kspk_amp_get, ext_kspk_amp_put),
@@ -1682,7 +1799,7 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 		return NULL;
 
 #define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(msm8952_wcd_cal)->X) = (Y))
-	S(v_hs_max, 1600);
+	S(v_hs_max, 1500);
 #undef S
 #define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(msm8952_wcd_cal)->X) = (Y))
 	S(num_btn, WCD_MBHC_DEF_BUTTONS);
@@ -1705,7 +1822,7 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 	 * 210-290 == Button 2
 	 * 360-680 == Button 3
 	 */
-#if defined(PROJECT_OLIVE) || defined(PROJECT_OLIVELITE) || defined(PROJECT_OLIVEWOOD)
+#if defined(CONFIG_PROJECT_OLIVES)
 	btn_low[0] = 92;
 	btn_high[0] = 92;
 	btn_low[1] = 266;
@@ -2302,12 +2419,13 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		.ignore_pmdown_time = 1,
 	},
 	{/* hw:x,27 */
-		.name = "MSM8X16 Compress3",
-		.stream_name = "Compress3",
+		.name = "MSM8X16 MultiMedia10",
+		.stream_name = "MultiMedia10",
 		.cpu_dai_name	= "MultiMedia10",
 		.platform_name  = "msm-pcm-dsp.1",
 		.dynamic = 1,
 		.dpcm_playback = 1,
+		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
 			 SND_SOC_DPCM_TRIGGER_POST},
 		.codec_dai_name = "snd-soc-dummy-dai",
@@ -2527,6 +2645,24 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA19,
+	},
+	{/* hw:x,41 */
+		.name = "MSM8x16 Haptic Audio",
+		.stream_name = "MultiMedia30",
+		.cpu_dai_name   = "MultiMedia30",
+		.platform_name  = "msm-pcm-dsp.1",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE |
+			 ASYNC_DPCM_SND_SOC_HW_PARAMS,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			 SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA30,
 	},
 	/* Backend I2S DAI Links */
 	{
@@ -2788,6 +2924,33 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		.id = MSM_BACKEND_DAI_QUINARY_MI2S_TX,
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ops = &msm8952_quin_mi2s_be_ops,
+		.ignore_suspend = 1,
+	},
+	/* Proxy Tx BACK END DAI Link */
+	{
+		.name = LPASS_BE_PROXY_TX,
+		.stream_name = "Proxy Capture",
+		.cpu_dai_name = "msm-dai-q6-dev.8195",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-tx",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_PROXY_TX,
+		.ignore_suspend = 1,
+	},
+	/* Proxy Rx BACK END DAI Link */
+	{
+		.name = LPASS_BE_PROXY_RX,
+		.stream_name = "Proxy Playback",
+		.cpu_dai_name = "msm-dai-q6-dev.8194",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-rx",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_PROXY_RX,
+		.ignore_pmdown_time = 1,
 		.ignore_suspend = 1,
 	},
 };
@@ -3149,17 +3312,19 @@ static int msm8952_asoc_machine_probe(struct platform_device *pdev)
 	const char *ext_pa = "qcom,msm-ext-pa";
 	const char *mclk = "qcom,msm-mclk-freq";
 	const char *wsa = "asoc-wsa-codec-names";
-	const char *wsa_prefix = "asoc-wsa-codec-prefixes";
 	const char *type = NULL;
 	const char *ext_pa_str = NULL;
-	const char *wsa_str = NULL;
-	const char *wsa_prefix_str = NULL;
 	const char *spk_ext_pa = "qcom,msm-spk-ext-pa";
 	int num_strings;
 	int id, i, val;
 	int ret = 0;
 	struct resource *muxsel;
+#if IS_ENABLED(CONFIG_SND_SOC_WSA881X_ANALOG)
+	const char *wsa_prefix = "asoc-wsa-codec-prefixes";
+	const char *wsa_str = NULL;
+	const char *wsa_prefix_str = NULL;
 	char *temp_str = NULL;
+#endif
 
 	pdata = devm_kzalloc(&pdev->dev,
 				sizeof(struct msm_asoc_mach_data),
@@ -3241,6 +3406,7 @@ parse_mclk_freq:
 	/*reading the gpio configurations from dtsi file*/
 	num_strings = of_property_count_strings(pdev->dev.of_node,
 			wsa);
+#if IS_ENABLED(CONFIG_SND_SOC_WSA881X_ANALOG)
 	if (num_strings > 0) {
 		if (wsa881x_get_probing_count() < 2) {
 			ret = -EPROBE_DEFER;
@@ -3306,6 +3472,7 @@ parse_mclk_freq:
 			msm_anlg_cdc_update_int_spk_boost(false);
 		}
 	}
+#endif
 
 	card = msm8952_populate_sndcard_dailinks(&pdev->dev);
 	dev_dbg(&pdev->dev, "default codec configured\n");

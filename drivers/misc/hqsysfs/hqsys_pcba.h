@@ -1,6 +1,7 @@
 #ifndef HQSYS_PCBA
 #define HQSYS_PCBA
 
+
 typedef enum {
 	PCBA_UNKNOW = 0,
 

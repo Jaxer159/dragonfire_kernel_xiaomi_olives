@@ -1,5 +1,5 @@
 /* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -758,16 +758,21 @@ static int32_t msm_sensor_driver_is_special_support(
 		{"olive_ov13b10_qtech", "omnivision_13b10_i"},
 		{"olive_ov13b10_ofilm", "omnivision_13b10_ii"},
 	};
-	char olive_front_camera_str_buff[2][2][20] = {
+	char olive_front_camera_str_buff[3][2][20] = {
 		{"olive_ov8856_qtech", "omnivision_8856_ii"},
 		{"olive_ov8856_sunny", "omnivision_8856_i"},
+		{"olive_s5k4h7_sunny", "samsung_s5k4h7_iii"},
 	};
-	char olive_rear_aux_camera_str_buff[3][2][30] = {
+	char olive_rear_aux_camera_str_buff[5][2][30] = {
 		{"olive_ov02a10_ofilm", "omnivision_02a10_i"},
 		{"olive_gc2375_sunny", "galaxycore_2375_ii"},
 		{"olivewood_gc02m1_sunny", "galaxycore_02m1_iii"},
+		{"olive_gc02m1_sunny", "galaxycore_02m1_iii"},
+		{"olive_gc02m1b_sunny", "galaxycore_02m1_iiii"},
+
 	};
 #endif
+
 
 /* static function definition */
 int32_t msm_sensor_driver_probe(void *setting,
@@ -1047,6 +1052,7 @@ int32_t msm_sensor_driver_probe(void *setting,
 		goto free_slave_info;
 	}
 
+
 	camera_info = kzalloc(sizeof(struct msm_camera_slave_info), GFP_KERNEL);
 	if (!camera_info)
 		goto free_slave_info;
@@ -1207,8 +1213,8 @@ CSID_TG:
 	s_ctrl->sensordata->cam_slave_info = slave_info;
 
 	msm_sensor_fill_sensor_info(s_ctrl, probed_info, entity_name);
-
-#if defined OLIVE_MSM_CAMERA_HW_INFO || defined OLIVEWOOD_MSM_CAMERA_HW_INFO
+	// to get proper camera info Start
+#if defined OLIVE_MSM_CAMERA_HW_INFO || defined OLIVEWOOD_MSM_CAMERA_HW_INFO || defined OLIVELITE_MSM_CAMERA_HW_INFO
 	if (0 == s_ctrl->id) {
 		for (i = 0; i < 6; i++)	{
 			if (strncmp((char *)(s_ctrl->sensordata->eeprom_name),
@@ -1219,7 +1225,7 @@ CSID_TG:
 			}
 		}
 	} else if (1 == s_ctrl->id) {
-		for (i = 0; i < 2; i++)	{
+		for (i = 0; i < 3; i++)	{
 			if (strncmp((char *)(s_ctrl->sensordata->eeprom_name),
 				olive_front_camera_str_buff[i][0],
 				strlen(s_ctrl->sensordata->eeprom_name)) == 0) {
@@ -1228,7 +1234,7 @@ CSID_TG:
 			}
 		}
 	} else if (2 == s_ctrl->id) {
-		for (i = 0; i < 3; i++)	{
+		for (i = 0; i < 5; i++)	{
 			if (strncmp((char *)(s_ctrl->sensordata->sensor_name),
 				olive_rear_aux_camera_str_buff[i][0],
 				strlen(s_ctrl->sensordata->sensor_name)) == 0) {
@@ -1237,27 +1243,6 @@ CSID_TG:
 			}
 		}
 	}
-#elif defined OLIVELITE_MSM_CAMERA_HW_INFO
-	if (0 == s_ctrl->id) {
-		for (i = 0; i < 6; i++)	{
-			if (strncmp((char *)(s_ctrl->sensordata->eeprom_name),
-				olive_rear_camera_str_buff[i][0],
-				strlen(s_ctrl->sensordata->eeprom_name)) == 0) {
-				hq_regiser_hw_info(HWID_MAIN_CAM, olive_rear_camera_str_buff[i][1]);
-				break;
-			}
-		}
-	} else if (1 == s_ctrl->id) {
-		for (i = 0; i < 2; i++)	{
-			if (strncmp((char *)(s_ctrl->sensordata->eeprom_name),
-				olive_front_camera_str_buff[i][0],
-				strlen(s_ctrl->sensordata->eeprom_name)) == 0) {
-				hq_regiser_hw_info(HWID_SUB_CAM, olive_front_camera_str_buff[i][1]);
-				break;
-			}
-		}
-	}
-#else
 	if (0 == s_ctrl->id) {
 		if (strncmp((char *)(s_ctrl->sensordata->eeprom_name),
 			"pine_ov13855_qtech",
@@ -1280,7 +1265,7 @@ CSID_TG:
 			strlen("pine_imx486_ofilm")) == 0) {
 			hq_regiser_hw_info(HWID_MAIN_CAM, "sony_imx486_ofilm_ii");
 		}
-
+		//hq_regiser_hw_info(HWID_MAIN_CAM, (char *)(s_ctrl->sensordata->eeprom_name));
 	} else if (1 == s_ctrl->id) {
 		if (strncmp((char *)(s_ctrl->sensordata->eeprom_name),
 			"pine_gc5035_qtech",
@@ -1295,10 +1280,10 @@ CSID_TG:
 			strlen("pine_gc5035_holitech")) == 0) {
 			hq_regiser_hw_info(HWID_SUB_CAM, "galaxycore_5035_iii");
 		}
-
+		//hq_regiser_hw_info(HWID_SUB_CAM, (char *)(s_ctrl->sensordata->eeprom_name));
 	}
 #endif
-
+	// to get proper camera info End
 
 	/*
 	 * Set probe succeeded flag to 1 so that no other camera shall

@@ -1,5 +1,5 @@
 /* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -342,6 +342,7 @@ struct device_node *of_batterydata_get_best_profile(
 			return ERR_PTR(-ENXIO);
 		}
 	}
+
 	/*
 	 * Find the battery data with a battery id resistor closest to this one
 	 */
@@ -364,7 +365,7 @@ struct device_node *of_batterydata_get_best_profile(
 				delta = abs(batt_ids.kohm[i] - batt_id_kohm);
 				limit = (batt_ids.kohm[i] * id_range_pct) / 100;
 				in_range = (delta <= limit);
-				if (in_range != 0){
+				if (in_range != 0) {
 					match = 1;
 				}
 				/*
@@ -373,7 +374,7 @@ struct device_node *of_batterydata_get_best_profile(
 				 * before selecting the best node.
 				 */
 				pr_err("dhx batt_ids.kohm = %d\n", batt_ids.kohm[i]);
-				if (batt_ids.kohm[i] == SUNWODA_DEFAULT_ID){
+				if (batt_ids.kohm[i] == SUNWODA_DEFAULT_ID) {
 					default_node = node;
 				}
 				if ((delta < best_delta || !best_node)
@@ -388,7 +389,7 @@ struct device_node *of_batterydata_get_best_profile(
 	checknum = abs(best_id_kohm - batt_id_kohm);
 	pr_err("checknum = %d,best_id_kohm = %d, batt_id_kohm = %d,match = %d,id_range_pct = %d\n",
 		checknum, best_id_kohm, batt_id_kohm, match, id_range_pct);
-	if (match == 0){
+	if (match == 0) {
 		best_node = default_node;
 		checknum = 0;
 	}

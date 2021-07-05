@@ -1,5 +1,5 @@
 /* Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,6 +15,10 @@
 #define __SMB5_CHARGER_REG_H
 
 #include <linux/bitops.h>
+
+#ifdef CONFIG_XIAOMI_SDM439
+#include <linux/sdm439.h>
+#endif
 
 #define CHGR_BASE	0x1000
 #define DCDC_BASE	0x1100
@@ -243,6 +247,18 @@ enum {
 #define SINGLE_DECREMENT_BIT			BIT(1)
 #define SINGLE_INCREMENT_BIT			BIT(0)
 
+#define USB_CMD_PULLDOWN_REG			(USBIN_BASE + 0x45)
+#define EN_PULLDOWN_USB_IN_BIT			BIT(0)
+
+#define HVDCP_PULSE_COUNT_MAX_REG              (USBIN_BASE + 0x5B)
+#define HVDCP_PULSE_COUNT_MAX_QC2_MASK         GENMASK(7, 6)
+enum {
+	HVDCP_PULSE_COUNT_MAX_QC2_5V,
+	HVDCP_PULSE_COUNT_MAX_QC2_9V,
+	HVDCP_PULSE_COUNT_MAX_QC2_12V,
+	HVDCP_PULSE_COUNT_MAX_QC2_INVALID
+};
+
 #define USBIN_ADAPTER_ALLOW_CFG_REG		(USBIN_BASE + 0x60)
 enum {
 	USBIN_ADAPTER_ALLOW_5V		= 0,
@@ -270,6 +286,8 @@ enum {
 
 #define USBIN_LOAD_CFG_REG			(USBIN_BASE + 0x65)
 #define ICL_OVERRIDE_AFTER_APSD_BIT		BIT(4)
+#define USBIN_AICL_STEP_TIMING_SEL_MASK		GENMASK(3, 2)
+#define USBIN_IN_COLLAPSE_GF_SEL_MASK		GENMASK(1, 0)
 
 #define USBIN_ICL_OPTIONS_REG			(USBIN_BASE + 0x66)
 #define CFG_USB3P0_SEL_BIT			BIT(2)
@@ -279,6 +297,8 @@ enum {
 #define USBIN_CURRENT_LIMIT_CFG_REG		(USBIN_BASE + 0x70)
 
 #define USBIN_AICL_OPTIONS_CFG_REG		(USBIN_BASE + 0x80)
+#define SUSPEND_ON_COLLAPSE_USBIN_BIT		BIT(7)
+#define USBIN_AICL_PERIODIC_RERUN_EN_BIT	BIT(4)
 #define USBIN_AICL_ADC_EN_BIT			BIT(3)
 #define USBIN_AICL_START_AT_MAX_BIT			BIT(5)
 #define SUSPEND_ON_COLLAPSE_USBIN_BIT			BIT(7)
@@ -300,8 +320,16 @@ enum {
  *  TYPEC Peripheral Registers  *
  ********************************/
 #define TYPE_C_SNK_STATUS_REG			(TYPEC_BASE + 0x06)
-#if defined(CONFIG_PROJECT_OLIVE) || defined(CONFIG_PROJECT_OLIVELITE) || defined(CONFIG_PROJECT_OLIVEWOOD)
+
+#ifdef CONFIG_XIAOMI_SDM439
+#define DETECTED_SRC_TYPE_MASK ((sdm439_current_device == XIAOMI_PINE) ? GENMASK(3, 0) : GENMASK(6, 0))
+#else
+#ifdef CONFIG_PROJECT_OLIVES
 #define DETECTED_SRC_TYPE_MASK			GENMASK(6, 0)
+#else
+#define DETECTED_SRC_TYPE_MASK			GENMASK(3, 0)
+#endif
+#endif
 #define SNK_RP_STD_DAM_BIT 		BIT(6)
 #define SNK_RP_1P5_DAM_BIT 		BIT(5)
 #define SNK_RP_3P0_DAM_BIT 		BIT(4)
@@ -310,9 +338,7 @@ enum {
 #define DAM_DIS_AICL 		BIT(3)
 #define SCHG_USB_TYPE_C_CFG		(USBIN_BASE + 0x58)
 #define BC1P2_START_ON_CC			BIT(7)
-#else
-#define DETECTED_SRC_TYPE_MASK			GENMASK(3, 0)
-#endif
+
 #define SNK_RP_STD_BIT				BIT(3)
 #define SNK_RP_1P5_BIT				BIT(2)
 #define SNK_RP_3P0_BIT				BIT(1)

@@ -1,7 +1,7 @@
 /*
  * MDSS MDP Interface (used by framebuffer core)
  *
- * Copyright (c) 2007-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2007-2018, 2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2007 Google Incorporated
  *
  * This software is licensed under the terms of the GNU General Public
@@ -59,7 +59,7 @@
 #include "mdss_mdp_trace.h"
 
 #define AXI_HALT_TIMEOUT_US	0x4000
-#define AUTOSUSPEND_TIMEOUT_MS	50
+#define AUTOSUSPEND_TIMEOUT_MS	200
 #define DEFAULT_MDP_PIPE_WIDTH	2048
 #define RES_1080p		(1088*1920)
 #define RES_UHD			(3840*2160)
@@ -98,6 +98,7 @@ static struct mdss_panel_intf pan_types[] = {
 	{"dsi", MDSS_PANEL_INTF_DSI},
 	{"edp", MDSS_PANEL_INTF_EDP},
 	{"hdmi", MDSS_PANEL_INTF_HDMI},
+	{"spi", MDSS_PANEL_INTF_SPI},
 };
 static char mdss_mdp_panel[MDSS_MAX_PANEL_LEN];
 
@@ -1769,8 +1770,7 @@ static int mdss_mdp_irq_clk_setup(struct mdss_data_type *mdata)
 	pr_debug("max mdp clk rate=%d\n", mdata->max_mdp_clk_rate);
 
 	ret = devm_request_irq(&mdata->pdev->dev, mdss_mdp_hw.irq_info->irq,
-				mdss_irq_handler,
-				IRQF_PERF_CRITICAL, "MDSS", mdata);
+				mdss_irq_handler, 0, "MDSS", mdata);
 	if (ret) {
 		pr_err("mdp request_irq() failed!\n");
 		return ret;
@@ -2633,13 +2633,55 @@ static ssize_t mdss_mdp_store_max_limit_bw(struct device *dev,
 	return len;
 }
 
+static ssize_t mdss_mdp_store_twm(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t len)
+{
+	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
+	u32 data = -1;
+	ssize_t rc = 0;
+
+	if (!mdata) {
+		pr_err("Invalid mdata structure\n");
+		return -EINVAL;
+	}
+
+	rc = kstrtoint(buf, 10, &data);
+	if (rc) {
+		pr_err("kstrtoint failed. rc=%zd\n", rc);
+		return rc;
+	}
+	mdata->twm_en = data ? true : false;
+	pr_err("TWM :  %s\n", (mdata->twm_en) ?
+		"ENABLED" : "DISABLED");
+	return len;
+}
+
+static ssize_t mdss_mdp_show_twm(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
+	ssize_t ret = 0;
+
+	if (!mdata) {
+		pr_err("Invalid mdata structure\n");
+		return -EINVAL;
+	}
+
+	pr_err("TWM :  %s\n", (mdata->twm_en) ?
+		"ENABLED" : "DISABLED");
+	ret = snprintf(buf, PAGE_SIZE, "%d\n", mdata->twm_en);
+	return ret;
+}
+
 static DEVICE_ATTR(caps, 0444, mdss_mdp_show_capabilities, NULL);
 static DEVICE_ATTR(bw_mode_bitmap, 0664,
 		mdss_mdp_read_max_limit_bw, mdss_mdp_store_max_limit_bw);
+static DEVICE_ATTR(twm_enable, 0664, mdss_mdp_show_twm, mdss_mdp_store_twm);
 
 static struct attribute *mdp_fs_attrs[] = {
 	&dev_attr_caps.attr,
 	&dev_attr_bw_mode_bitmap.attr,
+	&dev_attr_twm_enable.attr,
 	NULL
 };
 

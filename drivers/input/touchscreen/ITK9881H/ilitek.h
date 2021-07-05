@@ -2,7 +2,7 @@
  * ILITEK Touch IC driver
  *
  * Copyright (C) 2011 ILI Technology Corporation.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: Dicky Chiang <dicky_chiang@ilitek.com>
  *
@@ -112,7 +112,7 @@
 #define MT_B_TYPE			ENABLE
 #define TDDI_RST_BIND			DISABLE
 #define MT_PRESSURE			DISABLE
-#define ENABLE_WQ_ESD			ENABLE
+#define ENABLE_WQ_ESD			DISABLE
 #define ENABLE_WQ_BAT			DISABLE
 #define ENABLE_GESTURE			ENABLE
 #define REGULATOR_POWER			DISABLE
@@ -140,12 +140,12 @@
 
 #define ipio_info(fmt, arg...)						\
 ({									\
-	pr_info("ILITEK:INFO (%s, %d): " fmt, __func__, __LINE__, ##arg);	\
+	pr_debug("ILITEK:INFO (%s, %d): " fmt, __func__, __LINE__, ##arg);	\
 })									\
 
 #define ipio_err(fmt, arg...)						\
 ({									\
-	pr_err("ILITEK:ERR (%s, %d): " fmt, __func__, __LINE__, ##arg);	\
+	pr_debug("ILITEK:ERR (%s, %d): " fmt, __func__, __LINE__, ##arg);	\
 })									\
 
 extern bool ipio_debug_level;

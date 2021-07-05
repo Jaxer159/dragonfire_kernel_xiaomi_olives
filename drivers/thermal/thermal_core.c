@@ -460,7 +460,7 @@ static void handle_critical_trips(struct thermal_zone_device *tz,
 	}
 }
 
-void handle_thermal_trip(struct thermal_zone_device *tz, int trip)
+static void handle_thermal_trip(struct thermal_zone_device *tz, int trip)
 {
 	enum thermal_trip_type type;
 
@@ -578,19 +578,8 @@ exit:
 }
 EXPORT_SYMBOL_GPL(thermal_zone_set_trips);
 
-static void update_temperature(struct thermal_zone_device *tz)
+static void store_temperature(struct thermal_zone_device *tz, int temp)
 {
-	int temp, ret;
-
-	ret = thermal_zone_get_temp(tz, &temp);
-	if (ret) {
-		if (ret != -EAGAIN)
-			dev_warn(&tz->device,
-				 "failed to read out thermal zone (%d)\n",
-				 ret);
-		return;
-	}
-
 	mutex_lock(&tz->lock);
 	tz->last_temperature = tz->temperature;
 	tz->temperature = temp;
@@ -604,6 +593,21 @@ static void update_temperature(struct thermal_zone_device *tz)
 	else
 		dev_dbg(&tz->device, "last_temperature=%d, current_temperature=%d\n",
 			tz->last_temperature, tz->temperature);
+}
+
+static void update_temperature(struct thermal_zone_device *tz)
+{
+	int temp, ret;
+
+	ret = thermal_zone_get_temp(tz, &temp);
+	if (ret) {
+		if (ret != -EAGAIN)
+			dev_warn(&tz->device,
+				 "failed to read out thermal zone (%d)\n",
+				 ret);
+		return;
+	}
+	store_temperature(tz, temp);
 }
 
 static void thermal_zone_device_init(struct thermal_zone_device *tz)
@@ -620,12 +624,34 @@ static void thermal_zone_device_reset(struct thermal_zone_device *tz)
 	thermal_zone_device_init(tz);
 }
 
+void thermal_zone_device_update_temp(struct thermal_zone_device *tz,
+				enum thermal_notify_event event, int temp)
+{
+	int count;
+
+	if (atomic_read(&in_suspend) && (!tz->ops->is_wakeable ||
+		!(tz->ops->is_wakeable(tz))))
+		return;
+
+	trace_thermal_device_update(tz, event);
+	store_temperature(tz, temp);
+
+	thermal_zone_set_trips(tz);
+
+	tz->notify_event = event;
+
+	for (count = 0; count < tz->trips; count++)
+		handle_thermal_trip(tz, count);
+}
+EXPORT_SYMBOL(thermal_zone_device_update_temp);
+
 void thermal_zone_device_update(struct thermal_zone_device *tz,
 				enum thermal_notify_event event)
 {
 	int count;
 
-	if (atomic_read(&in_suspend))
+	if (atomic_read(&in_suspend) && (!tz->ops->is_wakeable ||
+		!(tz->ops->is_wakeable(tz))))
 		return;
 
 	if (!tz->ops->get_temp)
@@ -2619,6 +2645,9 @@ static int thermal_pm_notify(struct notifier_block *nb,
 	case PM_POST_SUSPEND:
 		atomic_set(&in_suspend, 0);
 		list_for_each_entry(tz, &thermal_tz_list, node) {
+			if (tz->ops->is_wakeable &&
+				tz->ops->is_wakeable(tz))
+				continue;
 			thermal_zone_device_init(tz);
 			thermal_zone_device_update(tz,
 						   THERMAL_EVENT_UNSPECIFIED);
@@ -2633,17 +2662,17 @@ static int thermal_pm_notify(struct notifier_block *nb,
 static struct notifier_block thermal_pm_nb = {
 	.notifier_call = thermal_pm_notify,
 };
-
-
+//add for thermal switch by dongkai start
+//#ifdef RAINBOW_FEATURE_THERMAL_SWITCH
 unsigned int sconfig;
 
 #define to_backlight_device(obj) container_of(obj, struct backlight_device, dev)
  static ssize_t sconfig_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+	//int result;
 
-
-
-
+	//if (!tz->ops->get_mode)
+	//	return -EPERM;
 	pr_err("sconfig_show sconfig = %d\n", sconfig);
 
 	return snprintf(buf, SNPRINTF_MAXLEN, "%d\n", sconfig);
@@ -2656,7 +2685,7 @@ static ssize_t sconfig_store(struct device *dev,
 
 	int ret;
 
-
+	//kobject_uevent_env(&dev->kobj, KOBJ_CHANGE, NULL);
 	sysfs_notify(&dev->kobj, NULL, "sconfig");
 
 	ret = kstrtoint(buf, 0, &sconfig);
@@ -2682,7 +2711,7 @@ static struct device_attribute dev_attr_thermal_config = {
 void thermalsconfig_init(void)
 {
 	   static struct device *dev;
-
+	   //static dev_t thermalsconfig_device_no = NULL;
 	   int result;
 
 	   dev = device_create(&thermal_class, NULL, MKDEV(0, 0), NULL, "thermal_message");
@@ -2701,8 +2730,8 @@ void thermalsconfig_init(void)
 		   printk(KERN_ALERT"Failed to create attribute file.");
 	   }
 }
-
-
+//#endif
+//add for thermal switch by dongkai end
 static int __init thermal_init(void)
 {
 	int result;
@@ -2727,11 +2756,11 @@ static int __init thermal_init(void)
 	result = of_parse_thermal_zones();
 	if (result)
 		goto exit_zone_parse;
-
-
+    //add for thermal switch by xujia start
+    //#ifdef RAINBOW_FEATURE_THERMAL_SWITCH
     thermalsconfig_init();
-
-
+    //#endif
+    //add for thermal switch by xujia end
 	result = register_pm_notifier(&thermal_pm_nb);
 	if (result)
 		pr_warn("Thermal: Can not register suspend notifier, return %d\n",

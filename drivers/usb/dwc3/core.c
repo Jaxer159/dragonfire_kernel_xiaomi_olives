@@ -1283,6 +1283,8 @@ static int dwc3_probe(struct platform_device *pdev)
 					"snps,usb3-u1u2-disable");
 	dwc->usb2_l1_disable = device_property_read_bool(dev,
 					"snps,usb2-l1-disable");
+	dwc->normal_eps_in_gsi_mode = device_property_read_bool(dev,
+					"normal-eps-in-gsi-mode");
 	if (dwc->enable_bus_suspend) {
 		pm_runtime_set_autosuspend_delay(dev, 500);
 		pm_runtime_use_autosuspend(dev);
@@ -1375,6 +1377,7 @@ static int dwc3_probe(struct platform_device *pdev)
 
 err_core_init:
 	dwc3_core_exit_mode(dwc);
+
 err1:
 	destroy_workqueue(dwc->dwc_wq);
 err0:
@@ -1409,9 +1412,9 @@ static int dwc3_remove(struct platform_device *pdev)
 
 	destroy_workqueue(dwc->dwc_wq);
 
-	pm_runtime_put_sync(&pdev->dev);
-	pm_runtime_allow(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
+	pm_runtime_put_noidle(&pdev->dev);
+	pm_runtime_set_suspended(&pdev->dev);
 
 	dwc3_free_event_buffers(dwc);
 	dwc3_free_scratch_buffers(dwc);

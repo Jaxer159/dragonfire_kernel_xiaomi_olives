@@ -60,8 +60,9 @@ void irqtime_account_irq(struct task_struct *curr)
 	s64 delta;
 	int cpu;
 	u64 wallclock;
+#ifdef CONFIG_SCHED_WALT
 	bool account = true;
-
+#endif
 	if (!sched_clock_irqtime)
 		return;
 

@@ -1,5 +1,5 @@
 /* Copyright (c) 2018 The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -27,6 +27,11 @@
 #include <linux/regulator/machine.h>
 #include <linux/pmic-voter.h>
 #include <linux/qpnp/qpnp-adc.h>
+
+#ifdef CONFIG_XIAOMI_SDM439
+#include <linux/sdm439.h>
+#endif
+
 #include "smb5-reg.h"
 #include "smb5-lib.h"
 #include "schgm-flash.h"
@@ -1285,6 +1290,7 @@ static enum power_supply_property smb5_batt_props[] = {
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_RECHARGE_SOC,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
 	POWER_SUPPLY_PROP_FCC_STEPPER_ENABLE,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_FVCOMP,
@@ -1446,15 +1452,26 @@ static int smb5_batt_get_prop(struct power_supply *psy,
 		rc = smblib_get_prop_from_bms(chg,
 				POWER_SUPPLY_PROP_CHARGE_FULL, val);
 		break;
+	case POWER_SUPPLY_PROP_TIME_TO_FULL_NOW:
+		rc = smblib_get_prop_from_bms(chg,
+				POWER_SUPPLY_PROP_TIME_TO_FULL_NOW, val);
+		break;
 	case POWER_SUPPLY_PROP_FCC_STEPPER_ENABLE:
 		val->intval = chg->fcc_stepper_enable;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+#ifdef CONFIG_XIAOMI_SDM439
+        val->intval = (sdm439_current_device == XIAOMI_PINE) ? 4000000 : 5000000;
+#else
 #ifdef CONFIG_PROJECT_PINE
 		val->intval = 4000000;
 #else
 		val->intval = 5000000;
 #endif
+#endif
+		break;
+	case POWER_SUPPLY_PROP_FVCOMP:
+		val->intval = 0;
 		break;
 	default:
 		pr_err("batt power supply prop %d not supported\n", psp);
@@ -1786,6 +1803,13 @@ static int smb5_configure_typec(struct smb_charger *chg)
 		return rc;
 	}
 
+	rc = smblib_masked_write(chg, USBIN_LOAD_CFG_REG,
+		USBIN_IN_COLLAPSE_GF_SEL_MASK | USBIN_AICL_STEP_TIMING_SEL_MASK,
+		0);
+	if (rc < 0)
+		dev_err(chg->dev,
+			"Couldn't set USBIN_LOAD_CFG_REG rc=%d\n", rc);
+
 	return rc;
 }
 
@@ -1973,6 +1997,33 @@ static int smb5_init_hw_jeita(struct smb_charger *chg)
 		dev_err(chg->dev, "%s:Couldn't configure JEITA_FVCOMP_CFG_HOT_REG rc=%d\n",
 			__func__, rc);
 	}
+#ifdef CONFIG_XIAOMI_SDM439
+    if (sdm439_current_device == XIAOMI_PINE) {
+        rc = smblib_write(chg, JEITA_CCCOMP_CFG_HOT_REG, HOT_ICL_1000MA);
+        if (rc < 0) {
+            dev_err(chg->dev, "%s:Couldn't configure JEITA_FVCOMP_CFG_COLD_REG rc=%d\n",
+                __func__, rc);
+        }
+
+        rc = smblib_write(chg, JEITA_CCCOMP_CFG_COLD_REG, COOL_ICL_1950MA);
+        if (rc < 0) {
+            dev_err(chg->dev, "%s:Couldn't configure JEITA_FVCOMP_CFG_HOT_REG rc=%d\n",
+                __func__, rc);
+        }
+    } else {
+        rc = smblib_write(chg, JEITA_CCCOMP_CFG_HOT_REG, HOT_ICL_OLIVE_2450MA);
+        if (rc < 0) {
+            dev_err(chg->dev, "%s:Couldn't configure JEITA_FVCOMP_CFG_COLD_REG rc=%d\n",
+                __func__, rc);
+        }
+
+        rc = smblib_write(chg, JEITA_CCCOMP_CFG_COLD_REG, COOL_ICL_OLIVE_2950MA);
+        if (rc < 0) {
+            dev_err(chg->dev, "%s:Couldn't configure JEITA_FVCOMP_CFG_HOT_REG rc=%d\n",
+                __func__, rc);
+        }
+    }
+#else
 #ifdef CONFIG_PROJECT_PINE
 	rc = smblib_write(chg, JEITA_CCCOMP_CFG_HOT_REG, HOT_ICL_1000MA);
 	if (rc < 0) {
@@ -1997,6 +2048,7 @@ static int smb5_init_hw_jeita(struct smb_charger *chg)
 		dev_err(chg->dev, "%s:Couldn't configure JEITA_FVCOMP_CFG_HOT_REG rc=%d\n",
 			__func__, rc);
 	}
+#endif
 #endif
 	return rc;
 }
@@ -2364,8 +2416,17 @@ static int smb5_init_hw(struct smb5 *chip)
 					rc);
 		}
 	}
-
-#if defined(CONFIG_PROJECT_OLIVE) || defined(CONFIG_PROJECT_OLIVELITE) || defined(CONFIG_PROJECT_OLIVEWOOD)
+#ifdef CONFIG_XIAOMI_SDM439
+    if (sdm439_current_device == XIAOMI_OLIVES) {
+        rc = smblib_write(chg, USBIN_9V_AICL_THRESHOLD_REG, 0x5);
+        if (rc < 0) {
+            dev_err(chg->dev, "Couldn't configure USBIN_9V_AICL_THRESHOLD_REG rc=%d\n",
+                rc);
+            return rc;
+        }
+    }
+#else
+#ifdef CONFIG_PROJECT_OLIVES
 	rc = smblib_write(chg, USBIN_9V_AICL_THRESHOLD_REG, 0x5);
 	if (rc < 0) {
 		dev_err(chg->dev, "Couldn't configure USBIN_9V_AICL_THRESHOLD_REG rc=%d\n",
@@ -2373,6 +2434,11 @@ static int smb5_init_hw(struct smb5 *chip)
 		return rc;
 	}
 #endif
+#endif
+	rc = smblib_write(chg, 0x1342, 0x1);
+	if (rc < 0) {
+		dev_err(chg->dev, "Couldn't config 0x1342 to 0x1 rc=%d\n", rc);
+	}
 
 	return rc;
 }

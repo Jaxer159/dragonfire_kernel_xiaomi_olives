@@ -23,7 +23,7 @@ static struct device *fm_lan_enable_dev;
 #define FM_LAN_DISABLE   "0"
 #define SNPRINTF_MAXLEN 1024
 
-
+//cat
 static ssize_t lan_enable_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -31,7 +31,7 @@ static ssize_t lan_enable_show(struct device *dev,
 	snprintf(buf, SNPRINTF_MAXLEN, "%d\n", gpio_flag);
 	return strlen(buf);
 }
-
+//echo
 static ssize_t lan_enable_store(struct device *dev,
 	struct device_attribute *attr, const char *buf,
 	size_t count)

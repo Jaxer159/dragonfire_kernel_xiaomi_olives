@@ -23,12 +23,10 @@ libufdt/
 *.so
 *.so.dbg
 *.mod.c
-*.i
 *.lst
 *.symtypes
 *.order
 *.elf
-*.bin
 *.tar
 *.gz
 *.bz2
@@ -126,3 +124,8 @@ all.config
 
 # fetched Android config fragments
 kernel/configs/android-*.cfg
+
+#
+#Ignoring Android.bp link file
+#
+Android.bp

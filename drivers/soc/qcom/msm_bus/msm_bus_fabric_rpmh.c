@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -78,7 +78,6 @@ ssize_t bw_show(struct device *dev, struct device_attribute *attr,
 			bus_node->lnode_list[i].lnode_ab[ACTIVE_CTX],
 			bus_node->lnode_list[i].lnode_ib[DUAL_CTX],
 			bus_node->lnode_list[i].lnode_ab[DUAL_CTX]);
-#if defined(CONFIG_TRACING) && defined(DEBUG)
 		trace_printk(
 		"[%d]:%s:Act_IB %llu Act_AB %llu Slp_IB %llu Slp_AB %llu\n",
 			i, bus_node->lnode_list[i].cl_name,
@@ -86,7 +85,6 @@ ssize_t bw_show(struct device *dev, struct device_attribute *attr,
 			bus_node->lnode_list[i].lnode_ab[ACTIVE_CTX],
 			bus_node->lnode_list[i].lnode_ib[DUAL_CTX],
 			bus_node->lnode_list[i].lnode_ab[DUAL_CTX]);
-#endif
 	}
 	off += scnprintf((buf + off), PAGE_SIZE,
 	"Max_Act_IB %llu Sum_Act_AB %llu Act_Util_fact %d Act_Vrail_comp %d\n",
@@ -100,7 +98,6 @@ ssize_t bw_show(struct device *dev, struct device_attribute *attr,
 		bus_node->node_bw[DUAL_CTX].sum_ab,
 		bus_node->node_bw[DUAL_CTX].util_used,
 		bus_node->node_bw[DUAL_CTX].vrail_used);
-#if defined(CONFIG_TRACING) && defined(DEBUG)
 	trace_printk(
 	"Max_Act_IB %llu Sum_Act_AB %llu Act_Util_fact %d Act_Vrail_comp %d\n",
 		bus_node->node_bw[ACTIVE_CTX].max_ib,
@@ -113,7 +110,6 @@ ssize_t bw_show(struct device *dev, struct device_attribute *attr,
 		bus_node->node_bw[DUAL_CTX].sum_ab,
 		bus_node->node_bw[DUAL_CTX].util_used,
 		bus_node->node_bw[DUAL_CTX].vrail_used);
-#endif
 	return off;
 }
 
@@ -729,6 +725,26 @@ static void bcm_commit_single_req(struct msm_bus_node_device_type *cur_bcm,
 					cmd_active->addr, cmd_active->data);
 
 	kfree(cmd_active);
+}
+
+void msm_bus_commit_single(struct device *dev)
+{
+	struct msm_bus_node_device_type *bus_dev;
+	struct msm_bus_node_device_type *bcm_dev;
+
+	if (!dev)
+		return;
+
+	bus_dev = to_msm_bus_node(dev);
+	if (!bus_dev)
+		return;
+
+	bcm_dev = to_msm_bus_node(bus_dev->node_info->bcm_devs[0]);
+	if (!bcm_dev)
+		return;
+
+	bcm_commit_single_req(bcm_dev, bcm_dev->node_vec[DUAL_CTX].vec_a,
+				bcm_dev->node_vec[DUAL_CTX].vec_b);
 }
 
 void *msm_bus_realloc_devmem(struct device *dev, void *p, size_t old_size,

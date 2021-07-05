@@ -1,5 +1,5 @@
-/* Copyright (c) 2008-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+/* Copyright (c) 2008-2018,2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -251,8 +251,8 @@ struct msm_mdp_interface {
 				do_div(out, 2 * max_bright);\
 				} while (0)
 #define MDSS_BL_TO_BRIGHT(out, v, bl_max, max_bright) do {\
-				out = ((v) * (max_bright));\
-				do_div(out, bl_max);\
+				out = (2 * ((v) * (max_bright)) + (bl_max));\
+				do_div(out, 2 * bl_max);\
 				} while (0)
 
 struct mdss_fb_file_info {
@@ -327,6 +327,7 @@ struct msm_fb_data_type {
 	struct mutex bl_lock;
 	struct mutex mdss_sysfs_lock;
 	bool ipc_resume;
+	bool allow_secure_bl_update;
 
 	struct platform_device *pdev;
 

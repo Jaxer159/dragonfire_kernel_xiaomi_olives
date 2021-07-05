@@ -39,7 +39,6 @@
 #include "limUtils.h"
 #include "limAssocUtils.h"
 #include "limSecurityUtils.h"
-#include "limTimerUtils.h"
 #include "pmmApi.h"
 #include "limApi.h"
 
@@ -588,7 +587,8 @@ limCreateTimers(tpAniSirGlobal pMac)
         limLog(pMac, LOGP, FL("AllocateMemory failed!"));
         goto err_timer;
     }
-
+    memset(pMac->lim.gLimPreAuthTimerTable.pTable,
+               0, cfgValue*sizeof(tLimPreAuthNode));
     limInitPreAuthTimerTable(pMac, &pMac->lim.gLimPreAuthTimerTable);
     PELOG1(limLog(pMac, LOG1, FL("alloc and init table for preAuth timers"));)
 
@@ -1953,7 +1953,9 @@ limDeactivateAndChangeTimer(tpAniSirGlobal pMac, tANI_U32 timerId)
         {
                 limLog(pMac, LOGE, FL("Unable to change g_lim_ap_ecsa_timer timer"));
         }
+        break;
 
+#ifdef WLAN_FEATURE_SAE
     case eLIM_AUTH_SAE_TIMER:
         if (tx_timer_deactivate(&pMac->lim.limTimers.sae_auth_timer)
             != TX_SUCCESS) {
@@ -1968,8 +1970,8 @@ limDeactivateAndChangeTimer(tpAniSirGlobal pMac, tANI_U32 timerId)
             return;
         }
         break;
+#endif
 
-        break;
      default:
             // Invalid timerId. Log error
             break;

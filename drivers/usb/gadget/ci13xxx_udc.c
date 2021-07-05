@@ -2,7 +2,7 @@
  * ci13xxx_udc.c - MIPS USB IP core family device controller
  *
  * Copyright (C) 2008 Chipidea - MIPS Technologies, Inc. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: David Lopo
  *
@@ -401,7 +401,9 @@ static int hw_device_state(u32 dma)
 		hw_cwrite(CAP_USBINTR, ~0,
 			     USBi_UI|USBi_UEI|USBi_PCI|USBi_URI|USBi_SLI);
 		hw_cwrite(CAP_USBCMD, USBCMD_RS, USBCMD_RS);
+		udc->transceiver->flags |= PHY_SOFT_CONNECT;
 	} else {
+		udc->transceiver->flags &= ~PHY_SOFT_CONNECT;
 		hw_cwrite(CAP_USBCMD, USBCMD_RS, 0);
 		hw_cwrite(CAP_USBINTR, ~0, 0);
 		/* Clear BIT(31) to disable AHB2AHB Bypass functionality */

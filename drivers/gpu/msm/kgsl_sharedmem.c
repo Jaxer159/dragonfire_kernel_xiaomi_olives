@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -268,7 +268,7 @@ void kgsl_process_init_sysfs(struct kgsl_device *device,
 	/* Keep private valid until the sysfs enries are removed. */
 	kgsl_process_private_get(private);
 
-	snprintf(name, sizeof(name), "%d", private->pid);
+	snprintf(name, sizeof(name), "%d", pid_nr(private->pid));
 
 	if (kobject_init_and_add(&private->kobj, &ktype_mem_entry,
 		kgsl_driver.prockobj, name)) {
@@ -445,8 +445,6 @@ static int kgsl_page_alloc_vmfault(struct kgsl_memdesc *memdesc,
 		get_page(page);
 		vmf->page = page;
 
-		memdesc->mapsize += PAGE_SIZE;
-
 		return 0;
 	}
 
@@ -502,8 +500,7 @@ static void kgsl_page_alloc_free(struct kgsl_memdesc *memdesc)
 
 		atomic_long_sub(memdesc->size, &kgsl_driver.stats.secure);
 	} else {
-		atomic_long_add(memdesc->size,
-			&kgsl_driver.stats.page_free_pending);
+		atomic_long_sub(memdesc->size, &kgsl_driver.stats.page_alloc);
 	}
 
 	if (memdesc->priv & KGSL_MEMDESC_TZ_LOCKED) {
@@ -521,11 +518,6 @@ static void kgsl_page_alloc_free(struct kgsl_memdesc *memdesc)
 	else
 		kgsl_pool_free_sgt(memdesc->sgt);
 
-	if (!(memdesc->priv & KGSL_MEMDESC_TZ_LOCKED)) {
-		atomic_long_sub(memdesc->size, &kgsl_driver.stats.page_alloc);
-		atomic_long_sub(memdesc->size,
-			&kgsl_driver.stats.page_free_pending);
-	}
 }
 
 /*
@@ -583,8 +575,6 @@ static int kgsl_contiguous_vmfault(struct kgsl_memdesc *memdesc,
 	else if (ret == -EFAULT)
 		return VM_FAULT_SIGBUS;
 
-	memdesc->mapsize += PAGE_SIZE;
-
 	return VM_FAULT_NOPAGE;
 }
 
@@ -598,7 +588,7 @@ static void kgsl_cma_coherent_free(struct kgsl_memdesc *memdesc)
 				&kgsl_driver.stats.secure);
 
 			kgsl_cma_unlock_secure(memdesc);
-			attrs = (unsigned long)&memdesc->attrs;
+			attrs = memdesc->attrs;
 		} else
 			atomic_long_sub(memdesc->size,
 				&kgsl_driver.stats.coherent);
@@ -807,6 +797,7 @@ void kgsl_memdesc_init(struct kgsl_device *device,
 		(memdesc->flags & KGSL_MEMALIGN_MASK) >> KGSL_MEMALIGN_SHIFT,
 		ilog2(PAGE_SIZE));
 	kgsl_memdesc_set_align(memdesc, align);
+	spin_lock_init(&memdesc->lock);
 }
 
 int
@@ -869,8 +860,6 @@ kgsl_sharedmem_page_alloc_user(struct kgsl_memdesc *memdesc,
 	 * are allocated by kgsl. This helps with improving the vm fault
 	 * routine by finding the faulted page in constant time.
 	 */
-	if (!(memdesc->flags & KGSL_MEMFLAGS_SECURE))
-		atomic_long_add(size, &kgsl_driver.stats.page_alloc_pending);
 
 	memdesc->pages = kgsl_malloc(len_alloc * sizeof(struct page *));
 	memdesc->page_count = 0;
@@ -976,9 +965,6 @@ kgsl_sharedmem_page_alloc_user(struct kgsl_memdesc *memdesc,
 		&kgsl_driver.stats.page_alloc_max);
 
 done:
-	if (!(memdesc->flags & KGSL_MEMFLAGS_SECURE))
-		atomic_long_sub(size, &kgsl_driver.stats.page_alloc_pending);
-
 	if (ret) {
 		if (memdesc->pages) {
 			unsigned int count = 1;

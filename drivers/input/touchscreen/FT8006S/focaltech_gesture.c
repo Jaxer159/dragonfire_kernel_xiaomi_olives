@@ -3,7 +3,7 @@
  * FocalTech TouchScreen driver.
  *
  * Copyright (c) 2012-2019, Focaltech Ltd. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -34,6 +34,7 @@
 * 1.Included header files
 *****************************************************************************/
 #include "focaltech_core.h"
+#include <linux/sysctl.h>
 
 /******************************************************************************
 * Private constant and macro definitions using #define
@@ -95,10 +96,14 @@ struct fts_gesture_st {
 * Static variables
 *****************************************************************************/
 static struct fts_gesture_st fts_gesture_data;
+static int sysctl_dt2w_min_val = 0;
+static int sysctl_dt2w_max_val = 1;
+static struct ctl_table_header *dt2w_sysctl_header;
 
 /*****************************************************************************
 * Global variable or extern global variabls/functions
 *****************************************************************************/
+bool ft8006s_gesture_mode = true;
 
 /*****************************************************************************
 * Static function prototypes
@@ -108,12 +113,12 @@ static ssize_t fts_gesture_show(struct device *dev,
 {
 	int count = 0;
 	u8 val = 0;
-	struct fts_ts_data *ts_data = fts_data;
+	struct fts_ts_data *ts_data = FT8006S_fts_data;
 
 	mutex_lock(&ts_data->input_dev->mutex);
 	fts_read_reg(FTS_REG_GESTURE_EN, &val);
 	count = snprintf(buf, PAGE_SIZE, "Gesture Mode:%s\n",
-					 ts_data->gesture_mode ? "On" : "Off");
+					 ft8006s_gesture_mode ? "On" : "Off");
 	count += snprintf(buf + count, PAGE_SIZE, "Reg(0xD0)=%d\n", val);
 	mutex_unlock(&ts_data->input_dev->mutex);
 
@@ -124,15 +129,15 @@ static ssize_t fts_gesture_store(struct device *dev,
 				 struct device_attribute *attr, const char *buf,
 				 size_t count)
 {
-	struct fts_ts_data *ts_data = fts_data;
+	struct fts_ts_data *ts_data = FT8006S_fts_data;
 
 	mutex_lock(&ts_data->input_dev->mutex);
 	if (FTS_SYSFS_ECHO_ON(buf)) {
 		FTS_DEBUG("enable gesture");
-		ts_data->gesture_mode = ENABLE;
+		ft8006s_gesture_mode = ENABLE;
 	} else if (FTS_SYSFS_ECHO_OFF(buf)) {
 		FTS_DEBUG("disable gesture");
-		ts_data->gesture_mode = DISABLE;
+		ft8006s_gesture_mode = DISABLE;
 	}
 	mutex_unlock(&ts_data->input_dev->mutex);
 
@@ -144,7 +149,7 @@ static ssize_t fts_gesture_buf_show(struct device *dev,
 {
 	int count = 0;
 	int i = 0;
-	struct input_dev *input_dev = fts_data->input_dev;
+	struct input_dev *input_dev = FT8006S_fts_data->input_dev;
 	struct fts_gesture_st *gesture = &fts_gesture_data;
 
 	mutex_lock(&input_dev->mutex);
@@ -276,7 +281,7 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 }
 
 /*****************************************************************************
-* Name: fts_gesture_readdata
+* Name: FT8006S_fts_gesture_readdata
 * Brief: Read information about gesture: enable flag/gesture points..., if ges-
 *        ture enable, save gesture points' information, and report to OS.
 *        It will be called this function every intrrupt when FTS_GESTURE_EN = 1
@@ -289,7 +294,7 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 *         1 - tp not in suspend/gesture not enable in TP FW
 *         -Exx - error
 *****************************************************************************/
-int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
+int FT8006S_fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
 {
 	int ret = 0;
 	int i = 0;
@@ -298,7 +303,7 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
 	struct input_dev *input_dev = ts_data->input_dev;
 	struct fts_gesture_st *gesture = &fts_gesture_data;
 
-	if (!ts_data->suspended || !ts_data->gesture_mode) {
+	if (!ts_data->suspended || !ft8006s_gesture_mode) {
 		return 1;
 	}
 
@@ -336,9 +341,9 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
 	return 0;
 }
 
-void fts_gesture_recovery(struct fts_ts_data *ts_data)
+void FT8006S_fts_gesture_recovery(struct fts_ts_data *ts_data)
 {
-	if (ts_data->gesture_mode && ts_data->suspended) {
+	if (ft8006s_gesture_mode && ts_data->suspended) {
 		FTS_DEBUG("gesture recovery...");
 		fts_write_reg(0xD1, 0xFF);
 		fts_write_reg(0xD2, 0xFF);
@@ -350,7 +355,7 @@ void fts_gesture_recovery(struct fts_ts_data *ts_data)
 	}
 }
 
-int fts_gesture_suspend(struct fts_ts_data *ts_data)
+int FT8006S_fts_gesture_suspend(struct fts_ts_data *ts_data)
 {
 	int i = 0;
 	u8 state = 0xFF;
@@ -383,7 +388,7 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
 	return 0;
 }
 
-int fts_gesture_resume(struct fts_ts_data *ts_data)
+int FT8006S_fts_gesture_resume(struct fts_ts_data *ts_data)
 {
 	int i = 0;
 	u8 state = 0xFF;
@@ -411,17 +416,17 @@ int fts_gesture_resume(struct fts_ts_data *ts_data)
 
 bool fts_gesture_flag;
 
-int fts_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int code, int value)
+int FT8006S_fts_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
-	struct fts_ts_data *ts_data = fts_data;
+	struct fts_ts_data *ts_data = FT8006S_fts_data;
 	FTS_FUNC_ENTER();
 	if (type == EV_SYN && code == SYN_CONFIG) {
 		if (value == WAKEUP_OFF) {
-			ts_data->gesture_mode = DISABLE;
+			ft8006s_gesture_mode = DISABLE;
 			fts_gesture_flag = false;
 			FTS_INFO("gesture disabled:%d", fts_gesture_flag);
 		} else if (value == WAKEUP_ON) {
-			ts_data->gesture_mode = ENABLE;
+			ft8006s_gesture_mode = ENABLE;
 			fts_gesture_flag = true;
 			FTS_INFO("fts_gesture_flag:%d", fts_gesture_flag);
 		}
@@ -430,7 +435,29 @@ int fts_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int co
 	return 0;
 }
 
-int fts_gesture_init(struct fts_ts_data *ts_data)
+static struct ctl_table dt2w_child_table[] = {
+    {
+        .procname       = "dt2w",
+        .maxlen         = sizeof(int),
+        .mode           = 0666,
+        .data           = &ft8006s_gesture_mode,
+        .proc_handler   = &proc_dointvec_minmax,
+        .extra1         = &sysctl_dt2w_min_val,
+        .extra2         = &sysctl_dt2w_max_val,
+    },
+    {}
+};
+
+static struct ctl_table dt2w_parent_table[] = {
+    {
+        .procname       = "dev",
+        .mode           = 0555,
+        .child          = dt2w_child_table,
+    },
+    {}
+};
+
+int FT8006S_fts_gesture_init(struct fts_ts_data *ts_data)
 {
 	struct input_dev *input_dev = ts_data->input_dev;
 
@@ -466,20 +493,29 @@ int fts_gesture_init(struct fts_ts_data *ts_data)
 	__set_bit(KEY_GESTURE_C, input_dev->keybit);
 	__set_bit(KEY_GESTURE_Z, input_dev->keybit);
 
-	input_dev->event = fts_gesture_switch;
+	input_dev->event = FT8006S_fts_gesture_switch;
 	fts_create_gesture_sysfs(ts_data->dev);
 
 	memset(&fts_gesture_data, 0, sizeof(struct fts_gesture_st));
-	ts_data->gesture_mode = DISABLE;
+	ft8006s_gesture_mode = DISABLE;
+
+	/* DT2W sysctl */
+	dt2w_sysctl_header = register_sysctl_table(dt2w_parent_table);
+	if (!dt2w_sysctl_header) {
+		printk(KERN_ALERT "Error: Failed to register dt2w_sysctl_header\n");
+		return -EFAULT;
+	}
 
 	FTS_FUNC_EXIT();
 	return 0;
 }
 
-int fts_gesture_exit(struct fts_ts_data *ts_data)
+int FT8006S_fts_gesture_exit(struct fts_ts_data *ts_data)
 {
 	FTS_FUNC_ENTER();
 	sysfs_remove_group(&ts_data->dev->kobj, &fts_gesture_group);
+	/* DT2W sysctl */
+	unregister_sysctl_table(dt2w_sysctl_header);
 	FTS_FUNC_EXIT();
 	return 0;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -52,6 +52,21 @@ u64 walt_load_reported_window;
 
 static struct irq_work walt_cpufreq_irq_work;
 static struct irq_work walt_migration_irq_work;
+
+void
+walt_fixup_cumulative_runnable_avg(struct rq *rq,
+				   struct task_struct *p, u64 new_task_load)
+{
+	s64 task_load_delta = (s64)new_task_load - task_load(p);
+	struct walt_sched_stats *stats = &rq->walt_stats;
+
+	stats->cumulative_runnable_avg += task_load_delta;
+	if ((s64)stats->cumulative_runnable_avg < 0)
+		panic("cra less than zero: tld: %lld, task_load(p) = %u\n",
+			task_load_delta, task_load(p));
+
+	walt_fixup_cum_window_demand(rq, task_load_delta);
+}
 
 u64 sched_ktime_clock(void)
 {
@@ -128,7 +143,7 @@ unsigned int __read_mostly walt_disabled = 0;
 
 __read_mostly unsigned int sysctl_sched_cpu_high_irqload = (10 * NSEC_PER_MSEC);
 
-unsigned int sysctl_sched_walt_rotate_big_tasks = 0;
+unsigned int sysctl_sched_walt_rotate_big_tasks;
 unsigned int walt_rotation_enabled;
 
 /*
@@ -299,7 +314,7 @@ void fixup_walt_sched_stats_common(struct rq *rq, struct task_struct *p,
  *	C1 busy time = 5 + 5 + 6 = 16ms
  *
  */
-__read_mostly bool sched_freq_aggr_en;
+__read_mostly int sched_freq_aggregate_threshold;
 
 static u64
 update_window_start(struct rq *rq, u64 wallclock, int event)
@@ -420,12 +435,18 @@ void sched_account_irqstart(int cpu, struct task_struct *curr, u64 wallclock)
 
 /*
  * Return total number of tasks "eligible" to run on highest capacity cpu
+ *
+ * This is simply nr_big_tasks for cpus which are not of max_capacity and
+ * nr_running for cpus of max_capacity
  */
-unsigned int walt_big_tasks(int cpu)
+unsigned int nr_eligible_big_tasks(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
 
-	return rq->walt_stats.nr_big_tasks;
+	if (!is_max_capacity_cpu(cpu))
+		return rq->walt_stats.nr_big_tasks;
+
+	return rq->nr_running;
 }
 
 void clear_walt_request(int cpu)
@@ -518,6 +539,7 @@ static u32  top_task_load(struct rq *rq)
 u64 freq_policy_load(struct rq *rq)
 {
 	unsigned int reporting_policy = sysctl_sched_freq_reporting_policy;
+	int freq_aggr_thresh = sched_freq_aggregate_threshold;
 	struct sched_cluster *cluster = rq->cluster;
 	u64 aggr_grp_load = cluster->aggr_grp_load;
 	u64 load, tt_load = 0;
@@ -528,7 +550,7 @@ u64 freq_policy_load(struct rq *rq)
 		goto done;
 	}
 
-	if (sched_freq_aggr_en)
+	if (aggr_grp_load > freq_aggr_thresh)
 		load = rq->prev_runnable_sum + aggr_grp_load;
 	else
 		load = rq->prev_runnable_sum + rq->grp_time.prev_runnable_sum;
@@ -551,7 +573,7 @@ u64 freq_policy_load(struct rq *rq)
 	}
 
 done:
-	trace_sched_load_to_gov(rq, aggr_grp_load, tt_load, sched_freq_aggr_en,
+	trace_sched_load_to_gov(rq, aggr_grp_load, tt_load, freq_aggr_thresh,
 				load, reporting_policy, walt_rotation_enabled,
 				sysctl_sched_little_cluster_coloc_fmin_khz,
 				coloc_boost_load);
@@ -2537,11 +2559,15 @@ static void transfer_busy_time(struct rq *rq, struct related_thread_group *grp,
  * Enable colocation and frequency aggregation for all threads in a process.
  * The children inherits the group id from the parent.
  */
-unsigned int __read_mostly sysctl_sched_enable_thread_grouping;
+
+/* Maximum allowed threshold before freq aggregation must be enabled */
+#define MAX_FREQ_AGGR_THRESH 1000
 
 struct related_thread_group *related_thread_groups[MAX_NUM_CGROUP_COLOC_ID];
 static LIST_HEAD(active_related_thread_groups);
 DEFINE_RWLOCK(related_thread_group_lock);
+
+unsigned int __read_mostly sysctl_sched_freq_aggregate_threshold_pct;
 
 /*
  * Task groups whose aggregate demand on a cpu is more than
@@ -2700,6 +2726,23 @@ DEFINE_MUTEX(policy_mutex);
 #define pct_to_real(tunable)	\
 		(div64_u64((u64)tunable * (u64)max_task_load(), 100))
 
+unsigned int update_freq_aggregate_threshold(unsigned int threshold)
+{
+	unsigned int old_threshold;
+
+	mutex_lock(&policy_mutex);
+
+	old_threshold = sysctl_sched_freq_aggregate_threshold_pct;
+
+	sysctl_sched_freq_aggregate_threshold_pct = threshold;
+	sched_freq_aggregate_threshold =
+		pct_to_real(sysctl_sched_freq_aggregate_threshold_pct);
+
+	mutex_unlock(&policy_mutex);
+
+	return old_threshold;
+}
+
 #define ADD_TASK	0
 #define REM_TASK	1
 
@@ -2809,34 +2852,25 @@ void add_new_task_to_grp(struct task_struct *new)
 {
 	unsigned long flags;
 	struct related_thread_group *grp;
-	struct task_struct *leader = new->group_leader;
-	unsigned int leader_grp_id = sched_get_group_id(leader);
 
-	if (!sysctl_sched_enable_thread_grouping &&
-	    leader_grp_id != DEFAULT_CGROUP_COLOC_ID)
+	/*
+	 * If the task does not belong to colocated schedtune
+	 * cgroup, nothing to do. We are checking this without
+	 * lock. Even if there is a race, it will be added
+	 * to the co-located cgroup via cgroup attach.
+	 */
+	if (!schedtune_task_colocated(new))
 		return;
 
-	if (thread_group_leader(new))
-		return;
-
-	if (leader_grp_id == DEFAULT_CGROUP_COLOC_ID) {
-		if (!same_schedtune(new, leader))
-			return;
-	}
-
+	grp = lookup_related_thread_group(DEFAULT_CGROUP_COLOC_ID);
 	write_lock_irqsave(&related_thread_group_lock, flags);
-
-	rcu_read_lock();
-	grp = task_related_thread_group(leader);
-	rcu_read_unlock();
 
 	/*
 	 * It's possible that someone already added the new task to the
-	 * group. A leader's thread group is updated prior to calling
-	 * this function. It's also possible that the leader has exited
-	 * the group. In either case, there is nothing else to do.
+	 * group. or it might have taken out from the colocated schedtune
+	 * cgroup. check these conditions under lock.
 	 */
-	if (!grp || new->grp) {
+	if (!schedtune_task_colocated(new) || new->grp) {
 		write_unlock_irqrestore(&related_thread_group_lock, flags);
 		return;
 	}
@@ -2930,6 +2964,7 @@ static int __init create_default_coloc_group(void)
 	list_add(&grp->list, &active_related_thread_groups);
 	write_unlock_irqrestore(&related_thread_group_lock, flags);
 
+	update_freq_aggregate_threshold(MAX_FREQ_AGGR_THRESH);
 	return 0;
 }
 late_initcall(create_default_coloc_group);

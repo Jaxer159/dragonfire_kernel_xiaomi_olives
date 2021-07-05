@@ -1,5 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -226,6 +225,7 @@ static struct qpnp_vadc_scale_fn vadc_scale_fn[] = {
 	[SCALE_QRD_SKUH_BATT_THERM] = {qpnp_adc_scale_qrd_skuh_batt_therm},
 	[SCALE_NCP_03WF683_THERM] = {qpnp_adc_scale_therm_ncp03},
 	[SCALE_QRD_SKUT1_BATT_THERM] = {qpnp_adc_scale_qrd_skut1_batt_therm},
+	[SCALE_QRD_SKUE_BATT_THERM] = {qpnp_adc_scale_qrd_skue_batt_therm},
 	[SCALE_PMI_CHG_TEMP] = {qpnp_adc_scale_pmi_chg_temp},
 	[SCALE_BATT_THERM_TEMP] = {qpnp_adc_batt_therm},
 	[SCALE_CHRG_TEMP] = {qpnp_adc_scale_chrg_temp},
@@ -529,7 +529,7 @@ static int qpnp_vadc_hc_pre_configure_usb_in(struct qpnp_vadc_chip *vadc,
 
 	/* Setup dig params for USB_IN_V */
 	conv.decimation = DECIMATION_TYPE2;
-	conv.cal_val = ADC_HC_ABS_CAL;
+	conv.cal_val = (enum qpnp_adc_cal_val)ADC_HC_ABS_CAL;
 	conv.calib_type = vadc->adc->adc_channels[dt_index].calib_type;
 
 	qpnp_vadc_hc_update_adc_dig_param(vadc, &conv, &dig_param);
@@ -1638,7 +1638,7 @@ int32_t qpnp_vadc_calib_vref(struct qpnp_vadc_chip *vadc,
 	conv.mode_sel = ADC_OP_NORMAL_MODE << QPNP_VADC_OP_MODE_SHIFT;
 	conv.hw_settle_time = ADC_CHANNEL_HW_SETTLE_DELAY_0US;
 	conv.fast_avg_setup = ADC_FAST_AVG_SAMPLE_1;
-	conv.cal_val = calib_type;
+	conv.cal_val = (enum qpnp_adc_cal_val)calib_type;
 
 	if (vadc->vadc_hc) {
 		rc = qpnp_vadc_hc_configure(vadc, &conv);
@@ -1711,7 +1711,7 @@ int32_t qpnp_vadc_calib_gnd(struct qpnp_vadc_chip *vadc,
 	conv.mode_sel = ADC_OP_NORMAL_MODE << QPNP_VADC_OP_MODE_SHIFT;
 	conv.hw_settle_time = ADC_CHANNEL_HW_SETTLE_DELAY_0US;
 	conv.fast_avg_setup = ADC_FAST_AVG_SAMPLE_1;
-	conv.cal_val = calib_type;
+	conv.cal_val = (enum qpnp_adc_cal_val)calib_type;
 
 	if (vadc->vadc_hc) {
 		rc = qpnp_vadc_hc_configure(vadc, &conv);
@@ -1829,10 +1829,10 @@ static int32_t qpnp_vadc_calib_device(struct qpnp_vadc_chip *vadc)
 					(calib_read_1 - calib_read_2);
 	vadc->adc->amux_prop->chan_prop->adc_graph[CALIB_RATIOMETRIC].dx =
 					vadc->adc->adc_prop->adc_vdd_reference;
-	vadc->adc->amux_prop->chan_prop->adc_graph[CALIB_RATIOMETRIC].adc_vref
-					= calib_read_1;
-	vadc->adc->amux_prop->chan_prop->adc_graph[CALIB_RATIOMETRIC].adc_gnd
-					= calib_read_2;
+	vadc->adc->amux_prop->chan_prop->adc_graph[CALIB_RATIOMETRIC].adc_vref =
+					calib_read_1;
+	vadc->adc->amux_prop->chan_prop->adc_graph[CALIB_RATIOMETRIC].adc_gnd =
+					calib_read_2;
 
 calib_fail:
 	return rc;

@@ -2,7 +2,7 @@
  * ILITEK Touch IC driver
  *
  * Copyright (C) 2011 ILI Technology Corporation.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: Dicky Chiang <dicky_chiang@ilitek.com>
  *
@@ -346,6 +346,8 @@ int ilitek_tddi_sleep_handler(int mode)
 	mutex_lock(&idev->touch_mutex);
 	atomic_set(&idev->tp_sleep, START);
 
+	idev->gesture = ilitek_gesture_flag ? ENABLE : DISABLE;
+
 	if (atomic_read(&idev->fw_stat) ||
 		atomic_read(&idev->mp_stat)) {
 		ipio_info("fw upgrade or mp still running, ignore sleep requst\n");
@@ -611,10 +613,12 @@ void ilitek_tddi_report_handler(void)
 	switch (pid) {
 	case P5_X_LARGE_AREA_PRESS_PACKET_ID:
 		ipio_info(" Demo LARGE_AREA PRESS_PACKET_ID \n");
+#if 0
 		input_report_key(idev->input, 523, 1);
 		input_sync(idev->input);
 		input_report_key(idev->input, 523, 0);
 		input_sync(idev->input);
+#endif
 		break;
 	case P5_X_LARGE_AREA_RELEASE_PACKET_ID:
 		ipio_info(" Demo LARGE_AREA RELEASE_PACKET_ID \n");

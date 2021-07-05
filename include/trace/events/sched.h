@@ -597,11 +597,11 @@ DEFINE_EVENT(sched_cpu_load, sched_cpu_load_lb,
 TRACE_EVENT(sched_load_to_gov,
 
 	TP_PROTO(struct rq *rq, u64 aggr_grp_load, u32 tt_load,
-		int freq_aggr, u64 load, int policy,
+		u64 freq_aggr_thresh, u64 load, int policy,
 		int big_task_rotation,
 		unsigned int sysctl_sched_little_cluster_coloc_fmin_khz,
 		u64 coloc_boost_load),
-	TP_ARGS(rq, aggr_grp_load, tt_load, freq_aggr, load, policy,
+	TP_ARGS(rq, aggr_grp_load, tt_load, freq_aggr_thresh, load, policy,
 		big_task_rotation, sysctl_sched_little_cluster_coloc_fmin_khz,
 		coloc_boost_load),
 
@@ -610,7 +610,7 @@ TRACE_EVENT(sched_load_to_gov,
 		__field(	int,    policy			)
 		__field(	int,	ed_task_pid		)
 		__field(	u64,    aggr_grp_load		)
-		__field(	int,    freq_aggr	)
+		__field(	u64,    freq_aggr_thresh	)
 		__field(	u64,    tt_load			)
 		__field(	u64,	rq_ps			)
 		__field(	u64,	grp_rq_ps		)
@@ -629,7 +629,7 @@ TRACE_EVENT(sched_load_to_gov,
 		__entry->policy		= policy;
 		__entry->ed_task_pid	= rq->ed_task ? rq->ed_task->pid : -1;
 		__entry->aggr_grp_load	= aggr_grp_load;
-		__entry->freq_aggr 	= freq_aggr;
+		__entry->freq_aggr_thresh = freq_aggr_thresh;
 		__entry->tt_load	= tt_load;
 		__entry->rq_ps		= rq->prev_runnable_sum;
 		__entry->grp_rq_ps	= rq->grp_time.prev_runnable_sum;
@@ -643,9 +643,9 @@ TRACE_EVENT(sched_load_to_gov,
 		__entry->coloc_boost_load = coloc_boost_load;
 	),
 
-	TP_printk("cpu=%d policy=%d ed_task_pid=%d aggr_grp_load=%llu freq_aggr=%d tt_load=%llu rq_ps=%llu grp_rq_ps=%llu nt_ps=%llu grp_nt_ps=%llu pl=%llu load=%llu big_task_rotation=%d sysctl_sched_little_cluster_coloc_fmin_khz=%u coloc_boost_load=%llu",
+	TP_printk("cpu=%d policy=%d ed_task_pid=%d aggr_grp_load=%llu freq_aggr_thresh=%llu tt_load=%llu rq_ps=%llu grp_rq_ps=%llu nt_ps=%llu grp_nt_ps=%llu pl=%llu load=%llu big_task_rotation=%d sysctl_sched_little_cluster_coloc_fmin_khz=%u coloc_boost_load=%llu",
 		__entry->cpu, __entry->policy, __entry->ed_task_pid,
-		__entry->aggr_grp_load, __entry->freq_aggr,
+		__entry->aggr_grp_load, __entry->freq_aggr_thresh,
 		__entry->tt_load, __entry->rq_ps, __entry->grp_rq_ps,
 		__entry->nt_ps, __entry->grp_nt_ps, __entry->pl, __entry->load,
 		__entry->big_task_rotation,
@@ -1560,34 +1560,6 @@ TRACE_EVENT(sched_boost_cpu,
 		  __entry->margin)
 );
 
-TRACE_EVENT(core_ctl_update_nr_need,
-
-	TP_PROTO(int cpu, int nr_need, int prev_misfit_need,
-		int nrrun, int max_nr),
-
-	TP_ARGS(cpu, nr_need, prev_misfit_need, nrrun, max_nr),
-
-	TP_STRUCT__entry(
-		__field( int, cpu)
-		__field( int, nr_need)
-		__field( int, prev_misfit_need)
-		__field( int, nrrun)
-		__field( int, max_nr)
-	),
-
-	TP_fast_assign(
-		__entry->cpu = cpu;
-		__entry->nr_need = nr_need;
-		__entry->prev_misfit_need = prev_misfit_need;
-		__entry->nrrun = nrrun;
-		__entry->max_nr = max_nr;
-	),
-
-	TP_printk("cpu=%d nr_need=%d prev_misfit_need=%d nrrun=%d max_nr=%d",
-		__entry->cpu, __entry->nr_need, __entry->prev_misfit_need,
-		__entry->nrrun, __entry->max_nr)
-);
-
 /*
  * Tracepoint for schedtune_tasks_update
  */
@@ -1810,27 +1782,31 @@ TRACE_EVENT(sched_overutilized,
 
 TRACE_EVENT(sched_get_nr_running_avg,
 
-	TP_PROTO(int cpu, int nr, int nr_misfit, int nr_max),
+	TP_PROTO(int avg, int big_avg, int iowait_avg,
+		 unsigned int max_nr, unsigned int big_max_nr),
 
-	TP_ARGS(cpu, nr, nr_misfit, nr_max),
+	TP_ARGS(avg, big_avg, iowait_avg, max_nr, big_max_nr),
 
 	TP_STRUCT__entry(
-		__field( int, cpu)
-		__field( int, nr)
-		__field( int, nr_misfit)
-		__field( int, nr_max)
+		__field( int,	avg			)
+		__field( int,	big_avg			)
+		__field( int,	iowait_avg		)
+		__field( unsigned int,	max_nr		)
+		__field( unsigned int,	big_max_nr	)
 	),
 
 	TP_fast_assign(
-		__entry->cpu = cpu;
-		__entry->nr = nr;
-		__entry->nr_misfit = nr_misfit;
-		__entry->nr_max = nr_max;
+		__entry->avg		= avg;
+		__entry->big_avg	= big_avg;
+		__entry->iowait_avg	= iowait_avg;
+		__entry->max_nr		= max_nr;
+		__entry->big_max_nr	= big_max_nr;
 	),
 
-	TP_printk("cpu=%d nr=%d nr_misfit=%d nr_max=%d",
-		__entry->cpu, __entry->nr, __entry->nr_misfit, __entry->nr_max)
-)
+	TP_printk("avg=%d big_avg=%d iowait_avg=%d max_nr=%u big_max_nr=%u",
+		__entry->avg, __entry->big_avg, __entry->iowait_avg,
+		__entry->max_nr, __entry->big_max_nr)
+);
 
 TRACE_EVENT(core_ctl_eval_need,
 

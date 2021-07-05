@@ -1,5 +1,5 @@
 /* Copyright (c) 2009-2019, The Linux Foundation. All rights reserved.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -476,7 +476,8 @@ static int32_t msm_flash_i2c_release(
 {
 	int32_t rc = 0;
 
-	if (!(&flash_ctrl->power_info) || !(&flash_ctrl->flash_i2c_client)) {
+	if ((&flash_ctrl->power_info == NULL) ||
+		(&flash_ctrl->flash_i2c_client == NULL)) {
 		pr_err("%s:%d failed: %pK %pK\n",
 			__func__, __LINE__, &flash_ctrl->power_info,
 			&flash_ctrl->flash_i2c_client);
@@ -911,7 +912,9 @@ static int32_t msm_flash_config(struct msm_flash_ctrl_t *flash_ctrl,
 			__func__, __LINE__, rc);
 		return rc;
 	}
+
 	CDBG("Exit %s type %d\n", __func__, flash_data->cfg_type);
+
 	return rc;
 }
 

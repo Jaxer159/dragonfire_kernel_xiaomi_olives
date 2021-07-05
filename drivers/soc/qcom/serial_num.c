@@ -36,7 +36,7 @@ static int sn_read(struct seq_file *m, void *v)
 
 	dev_dbg(drvdata->dev, "serial num: %x\n", sn);
 
-	seq_printf(m, "0x%x\n", sn);
+	seq_printf(m, "0x%x", sn);
 
 	return 0;
 
@@ -80,7 +80,7 @@ static int cfi_read(struct seq_file *m, void *v)
 
 	dev_dbg(drvdata->dev, "cpu_feature_id: %x\n", cfi);
 
-	seq_printf(m, "0x%x\n", cfi);
+	seq_printf(m, "0x%x", cfi);
 
 	return 0;
 

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,6 +32,9 @@
 };
 
 &i2c_5 { /* BLSP2 QUP1 (NFC) */
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 	status = "ok";
 	nq@28 {
 		compatible = "qcom,nq-nci";
@@ -624,6 +627,9 @@
 };
 
 &i2c_2 {
+#address-cells = <1>;
+#size-cells = <0>;
+
 #include "smb1355.dtsi"
 };
 

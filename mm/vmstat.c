@@ -957,6 +957,7 @@ const char * const vmstat_text[] = {
 	"nr_isolated_file",
 	"workingset_refault",
 	"workingset_activate",
+	"workingset_restore",
 	"workingset_nodereclaim",
 	"nr_anon_pages",
 	"nr_mapped",
@@ -974,7 +975,6 @@ const char * const vmstat_text[] = {
 	"nr_dirtied",
 	"nr_written",
 	"nr_indirectly_reclaimable",
-	"nr_ion_heap",
 
 	/* enum writeback_stat_item counters */
 	"nr_dirty_threshold",
@@ -1659,13 +1659,13 @@ static bool need_update(int cpu)
  */
 void quiet_vmstat(void)
 {
-	if (unlikely(system_state != SYSTEM_RUNNING))
+	if (system_state != SYSTEM_RUNNING)
 		return;
 
 	if (!delayed_work_pending(this_cpu_ptr(&vmstat_work)))
 		return;
 
-	if (likely(!need_update(smp_processor_id())))
+	if (!need_update(smp_processor_id()))
 		return;
 
 	/*

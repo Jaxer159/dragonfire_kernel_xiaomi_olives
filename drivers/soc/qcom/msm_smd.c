@@ -1,6 +1,7 @@
 /* drivers/soc/qcom/msm_smd.c
  *
  * Copyright (C) 2007 Google, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (c) 2008-2017, 2018, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *

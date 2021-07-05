@@ -1635,7 +1635,6 @@ int cpr_regulator_set_corner_voltage(struct regulator *regulator,
 	return -EINVAL;
 }
 #endif
-
 #ifdef CONFIG_PM
 static int cpr_suspend(struct cpr_regulator *cpr_vreg)
 {

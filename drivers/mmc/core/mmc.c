@@ -21,13 +21,15 @@
 #include <linux/mmc/mmc.h>
 #include <linux/reboot.h>
 #include <trace/events/mmc.h>
-#include <linux/mmc/ffu.h>
+
 #include "core.h"
 #include "host.h"
 #include "bus.h"
 #include "mmc_ops.h"
 #include "sd_ops.h"
+
 #define DEFAULT_CMD6_TIMEOUT_MS	500
+#define MIN_CACHE_EN_TIMEOUT_MS 1600
 
 static const unsigned int tran_exp[] = {
 	10000,		100000,		1000000,	10000000,
@@ -549,8 +551,7 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 			card->cid.year += 16;
 
 		/* check whether the eMMC card supports BKOPS */
-		if (!mmc_card_broken_hpi(card) &&
-		    (ext_csd[EXT_CSD_BKOPS_SUPPORT] & 0x1) &&
+		if ((ext_csd[EXT_CSD_BKOPS_SUPPORT] & 0x1) &&
 				card->ext_csd.hpi) {
 			card->ext_csd.bkops = 1;
 			card->ext_csd.bkops_en = ext_csd[EXT_CSD_BKOPS_EN];
@@ -660,6 +661,43 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 	/* Some eMMC set the value too low so set a minimum */
 	if (card->ext_csd.part_time < MMC_MIN_PART_SWITCH_TIME)
 		card->ext_csd.part_time = MMC_MIN_PART_SWITCH_TIME;
+
+	if (card->ext_csd.rev >= 7) {
+		/* Enhance Strobe is supported since v5.1 which rev should be
+		 * 8 but some eMMC devices can support it with rev 7. So handle
+		 * Enhance Strobe here.
+		 */
+		card->ext_csd.strobe_support = ext_csd[EXT_CSD_STROBE_SUPPORT];
+		card->ext_csd.cmdq_support = ext_csd[EXT_CSD_CMDQ_SUPPORT];
+		card->ext_csd.fw_version = ext_csd[EXT_CSD_FIRMWARE_VERSION];
+		pr_info("%s: eMMC FW version: 0x%02x\n",
+			mmc_hostname(card->host),
+			card->ext_csd.fw_version);
+		if (card->ext_csd.cmdq_support) {
+			/*
+			 * Queue Depth = N + 1,
+			 * see JEDEC JESD84-B51 section 7.4.19
+			 */
+			card->ext_csd.cmdq_depth =
+				ext_csd[EXT_CSD_CMDQ_DEPTH] + 1;
+			pr_info("%s: CMDQ supported: depth: %d\n",
+				mmc_hostname(card->host),
+				card->ext_csd.cmdq_depth);
+		}
+		card->ext_csd.barrier_support =
+			ext_csd[EXT_CSD_BARRIER_SUPPORT];
+		card->ext_csd.cache_flush_policy =
+			ext_csd[EXT_CSD_CACHE_FLUSH_POLICY];
+		pr_info("%s: cache barrier support %d flush policy %d\n",
+				mmc_hostname(card->host),
+				card->ext_csd.barrier_support,
+				card->ext_csd.cache_flush_policy);
+	} else {
+		card->ext_csd.cmdq_support = 0;
+		card->ext_csd.cmdq_depth = 0;
+		card->ext_csd.barrier_support = 0;
+		card->ext_csd.cache_flush_policy = 0;
+	}
 
 	/* eMMC v5 or later */
 	if (card->ext_csd.rev >= 7) {
@@ -2171,23 +2209,30 @@ reinit:
 		if (err) {
 			pr_warn("%s: Enabling HPI failed\n",
 				mmc_hostname(card->host));
+			card->ext_csd.hpi_en = 0;
 			err = 0;
-		} else
+		} else {
 			card->ext_csd.hpi_en = 1;
+		}
 	}
 
 	/*
-	 * If cache size is higher than 0, this indicates
-	 * the existence of cache and it can be turned on.
+	 * If cache size is higher than 0, this indicates the existence of cache
+	 * and it can be turned on. Note that some eMMCs from Micron has been
+	 * reported to need ~800 ms timeout, while enabling the cache after
+	 * sudden power failure tests. Let's extend the timeout to a minimum of
+	 * DEFAULT_CACHE_EN_TIMEOUT_MS and do it for all cards.
 	 * If HPI is not supported then cache shouldn't be enabled.
 	 */
-	if (!mmc_card_broken_hpi(card) &&
-	    card->ext_csd.cache_size > 0) {
+	if (card->ext_csd.cache_size > 0) {
 		if (card->ext_csd.hpi_en &&
 			(!(card->quirks & MMC_QUIRK_CACHE_DISABLE))) {
-			err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-					EXT_CSD_CACHE_CTRL, 1,
-					card->ext_csd.generic_cmd6_time);
+			unsigned int timeout_ms = MIN_CACHE_EN_TIMEOUT_MS;
+
+		  timeout_ms = max(card->ext_csd.generic_cmd6_time, timeout_ms);
+		  err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
+				  EXT_CSD_CACHE_CTRL, 1, timeout_ms);
+
 			if (err && err != -EBADMSG) {
 				pr_err("%s: %s: fail on CACHE_CTRL ON %d\n",
 					mmc_hostname(host), __func__, err);
@@ -2949,10 +2994,11 @@ static int mmc_runtime_resume(struct mmc_host *host)
 	int err = 0;
 	ktime_t start = ktime_get();
 
+	MMC_TRACE(host, "%s\n", __func__);
+
 	if (!(host->caps & MMC_CAP_AGGRESSIVE_PM))
 		goto out;
 
-	MMC_TRACE(host, "%s\n", __func__);
 	err = _mmc_resume(host);
 	if (err && err != -ENOMEDIUM)
 		pr_err("%s: error %d doing runtime resume\n",
@@ -3004,7 +3050,7 @@ static int mmc_reset(struct mmc_host *host)
 		return ret;
 	}
 
-	ret = mmc_init_card(host, host->card->ocr, NULL);
+	ret = mmc_init_card(host, host->card->ocr, host->card);
 	if (ret) {
 		pr_err("%s: %s: mmc_init_card failed (%d)\n",
 			mmc_hostname(host), __func__, ret);

@@ -5,13 +5,9 @@
 # A mix between the arm64 and arm vDSO Makefiles.
 
 ifeq ($(cc-name),clang)
-  CC_ARM32 := $(CC) $(CLANG_TARGET_ARM32) -no-integrated-as
-  GCC_ARM32_TC := $(realpath $(dir $(shell which $(CROSS_COMPILE_ARM32)ld))/..)
-ifneq ($(GCC_ARM32_TC),)
-  CC_ARM32 += --gcc-toolchain=$(GCC_ARM32_TC)
-endif
+  CC_ARM32 := $(CC) $(CLANG_TARGET_ARM32) -no-integrated-as $(CLANG_GCC32_TC) $(CLANG_PREFIX32)
 else
-  CC_ARM32 := $(CROSS_COMPILE_ARM32)$(cc-name)
+  CC_ARM32 ?= $(CROSS_COMPILE_ARM32)$(cc-name)
 endif
 
 # Same as cc-*option, but using CC_ARM32 instead of CC
@@ -33,9 +29,7 @@ cc32-ldoption = $(call try-run,\
 # NOSTDINC_FLAGS
 VDSO_CPPFLAGS := -nostdinc -isystem $(shell $(CC_ARM32) -print-file-name=include)
 VDSO_CPPFLAGS += $(LINUXINCLUDE)
-VDSO_CPPFLAGS += -D__KERNEL__
-VDSO_CPPFLAGS += $(call cc-option,-Qunused-arguments,)
-VDSO_CPPFLAGS += $(ARCH_CPPFLAGS) $(KCPPFLAGS)
+VDSO_CPPFLAGS += $(KBUILD_CPPFLAGS)
 
 # Common C and assembly flags
 # From top-level Makefile
@@ -92,6 +86,19 @@ VDSO_CFLAGS += -D__uint128_t='void*'
 # (on GCC 4.8 or older, there is unfortunately no way to silence this warning)
 VDSO_CFLAGS += $(call cc32-disable-warning,shift-count-overflow)
 VDSO_CFLAGS += -Wno-int-to-pointer-cast
+
+# Compile as THUMB2 or ARM. Unwinding via frame-pointers in THUMB2 is
+# unreliable.
+ifeq ($(CONFIG_THUMB2_COMPAT_VDSO), y)
+VDSO_CFLAGS += -mthumb -fomit-frame-pointer
+else
+VDSO_CFLAGS += -marm
+endif
+
+ifeq ($(cc-name),clang)
+# Snapdragon LLVM specific warning
+VDSO_CFLAGS += $(call cc32-disable-warning, vectorizer-no-neon)
+endif
 
 VDSO_AFLAGS := $(VDSO_CAFLAGS)
 VDSO_AFLAGS += -D__ASSEMBLY__

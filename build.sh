@@ -93,7 +93,7 @@ cp $OUTDIR/arch/arm64/boot/dtbo.img $ZIP_DIR
 make normal &>/dev/null
 cd ..
 cd product/
-./clean.sh
+./clear.sh
 cd ..
 TIME=$(date "+%Y%m%d-%H%M")
 ZIP_NAME="DragonFire-Kernel-olives-$TIME.zip"

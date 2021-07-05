@@ -2,7 +2,7 @@
  *  Switch class driver
  *
  * Copyright (C) 2008 Google, Inc.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Author: Mike Lockwood <lockwood@android.com>
  *
  * This software is licensed under the terms of the GNU General Public

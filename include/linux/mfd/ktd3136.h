@@ -25,7 +25,7 @@
 #define KTD_I2C_NAME            "ktd,ktd3137"
 #define DEFAULT_PWM_NAME    "ktd-backlight"
 
-
+//struct i2c_client *ktd3137_client;
 
 struct ktd3137_bl_pdata {
 	bool pwm_mode;

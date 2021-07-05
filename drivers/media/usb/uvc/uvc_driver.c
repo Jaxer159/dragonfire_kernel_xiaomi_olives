@@ -2,7 +2,6 @@
  *      uvc_driver.c  --  USB Video Class driver
  *
  *      Copyright (C) 2005-2010
- *      Copyright (C) 2019 XiaoMi, Inc.
  *          Laurent Pinchart (laurent.pinchart@ideasonboard.com)
  *
  *      This program is free software; you can redistribute it and/or modify
@@ -1023,8 +1022,7 @@ static int uvc_parse_standard_control(struct uvc_device *dev,
 			return -EINVAL;
 		}
 
-		/* Make sure the terminal type MSB is not null, otherwise it
-		 * could be confused with a unit.
+		/*
 		 * Reject invalid terminal types that would cause issues:
 		 *
 		 * - The high byte must be non-zero, otherwise it would be

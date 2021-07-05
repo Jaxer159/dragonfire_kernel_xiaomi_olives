@@ -1,5 +1,5 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+/* Copyright (c) 2012-2018, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -122,11 +122,20 @@ static inline void INIT_MSM_VIDC_LIST(struct msm_vidc_list *mlist)
 	INIT_LIST_HEAD(&mlist->list);
 }
 
+static inline void DEINIT_MSM_VIDC_LIST(struct msm_vidc_list *mlist)
+{
+	mutex_destroy(&mlist->lock);
+}
 enum buffer_owner {
 	DRIVER,
 	FIRMWARE,
 	CLIENT,
 	MAX_OWNER
+};
+
+struct eos_buf {
+	struct list_head list;
+	struct msm_smem smem;
 };
 
 struct internal_buf {
@@ -271,6 +280,7 @@ struct msm_vidc_inst {
 	struct msm_vidc_list persistbufs;
 	struct msm_vidc_list pending_getpropq;
 	struct msm_vidc_list outputbufs;
+	struct msm_vidc_list eosbufs;
 	struct msm_vidc_list registeredbufs;
 	struct buffer_requirements buff_req;
 	void *mem_client;

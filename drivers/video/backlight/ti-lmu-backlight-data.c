@@ -2,7 +2,7 @@
  * TI LMU (Lighting Management Unit) Backlight Device Data
  *
  * Copyright 2016 Texas Instruments
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: Milo Kim <milo.kim@ti.com>
  *
@@ -228,7 +228,7 @@ static const struct ti_lmu_bl_reg lm3695_reg_info = {
 
 /* LM3697 */
 static u32 lm3697_init_regs[] = {
-
+	//LM3697_INIT_RAMP_SELECT,
 	LM3697_REG_HVLED_OUTPUT_CFG,
 	LM3697_REG_BOOST_CFG,
 	LM3697_REG_PWM_CFG,

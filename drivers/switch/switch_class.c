@@ -2,7 +2,7 @@
  *  drivers/switch/switch_class.c
  *
  * Copyright (C) 2008 Google, Inc.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Author: Mike Lockwood <lockwood@android.com>
  *
  * This software is licensed under the terms of the GNU General Public

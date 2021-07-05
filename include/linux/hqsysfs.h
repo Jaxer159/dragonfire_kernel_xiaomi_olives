@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
- * Copyright (C) 2019 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -98,7 +98,7 @@ struct hw_info{
 	enum hardware_id hw_id;
 	struct attribute attr;
 	unsigned int hw_exist;
-
+//	const char *hw_type_name;
 	char *hw_device_name;
 };
 

@@ -1,5 +1,5 @@
-/* Copyright (c) 2009-2018, Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+/* Copyright (c) 2009-2020, Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -219,6 +219,7 @@ struct msm_otg_platform_data {
 };
 
 #define SDP_CHECK_DELAY_MS 10000 /* in ms */
+#define SDP_CHECK_BOOT_DELAY_MS 30000 /* in ms */
 
 #define MSM_USB_BASE	(motg->regs)
 #define MSM_USB_PHY_CSR_BASE (motg->phy_csr_regs)
@@ -881,8 +882,6 @@ static void msm_usb_phy_reset(struct msm_otg *motg)
 	mb();
 }
 
-static void msm_chg_block_on(struct msm_otg *);
-
 static int msm_otg_reset(struct usb_phy *phy)
 {
 	struct msm_otg *motg = container_of(phy, struct msm_otg, phy);
@@ -891,6 +890,7 @@ static int msm_otg_reset(struct usb_phy *phy)
 	u32 val = 0;
 	u32 ulpi_val = 0;
 
+	mutex_lock(&motg->lock);
 	msm_otg_dbg_log_event(&motg->phy, "USB RESET", phy->otg->state,
 			get_pm_runtime_counter(phy->dev));
 	/*
@@ -899,10 +899,13 @@ static int msm_otg_reset(struct usb_phy *phy)
 	 * USB BAM reset on other cases e.g. USB cable disconnections.
 	 * If hardware reported error then it must be reset for recovery.
 	 */
-	if (motg->err_event_seen)
+	if (motg->err_event_seen) {
 		dev_info(phy->dev, "performing USB h/w reset for recovery\n");
-	else if (pdata->disable_reset_on_disconnect && motg->reset_counter)
+	} else if (pdata->disable_reset_on_disconnect &&
+				motg->reset_counter) {
+		mutex_unlock(&motg->lock);
 		return 0;
+	}
 
 	motg->reset_counter++;
 
@@ -917,6 +920,7 @@ static int msm_otg_reset(struct usb_phy *phy)
 			enable_irq(motg->phy_irq);
 
 		enable_irq(motg->irq);
+		mutex_unlock(&motg->lock);
 		return ret;
 	}
 
@@ -927,6 +931,7 @@ static int msm_otg_reset(struct usb_phy *phy)
 	ret = msm_otg_link_reset(motg);
 	if (ret) {
 		dev_err(phy->dev, "link reset failed\n");
+		mutex_unlock(&motg->lock);
 		return ret;
 	}
 
@@ -981,11 +986,12 @@ static int msm_otg_reset(struct usb_phy *phy)
 	 */
 	msm_usb_bam_enable(CI_CTRL, false);
 
-	if (motg->phy.otg->state == OTG_STATE_UNDEFINED &&
+	if (phy->otg->state == OTG_STATE_UNDEFINED &&
 			motg->rm_pulldown) {
 		msm_otg_dbg_log_event(&motg->phy, "PHY NON DRIVE", 0, 0);
 		msm_chg_block_on(motg);
 	}
+	mutex_unlock(&motg->lock);
 
 	return 0;
 }
@@ -1924,12 +1930,13 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned int mA)
 							motg->chg_type);
 
 	psy_type = get_psy_type(motg);
-	if (psy_type == POWER_SUPPLY_TYPE_USB_FLOAT) {
-		if (!mA)
+	if (psy_type == POWER_SUPPLY_TYPE_USB_FLOAT ||
+		(psy_type == POWER_SUPPLY_TYPE_USB &&
+			motg->enable_sdp_check_timer)) {
+		if (!mA) {
 			pval.intval = -ETIMEDOUT;
-		else
-			pval.intval = 1000 * mA;
-		goto set_prop;
+			goto set_prop;
+		}
 	}
 
 	if (motg->cur_power == mA)
@@ -2196,28 +2203,6 @@ static int msm_otg_set_host(struct usb_otg *otg, struct usb_bus *host)
 		queue_work(motg->otg_wq, &motg->sm_work);
 
 	return 0;
-}
-
-static void msm_chg_block_on(struct msm_otg *motg)
-{
-	struct usb_phy *phy = &motg->phy;
-	u32 func_ctrl;
-
-	/* put the controller in non-driving mode */
-	func_ctrl = ulpi_read(phy, ULPI_FUNC_CTRL);
-	dev_err(motg->phy.dev, "non-drive mode value 0x%x\n", func_ctrl);
-	func_ctrl &= ~ULPI_FUNC_CTRL_OPMODE_MASK;
-	func_ctrl |= ULPI_FUNC_CTRL_OPMODE_NONDRIVING;
-	ulpi_write(phy, func_ctrl, ULPI_FUNC_CTRL);
-
-	/* disable DP and DM pull down resistors */
-	ulpi_write(phy, 0x6, 0xC);
-	/* Clear charger detecting control bits */
-	ulpi_write(phy, 0x1F, 0x86);
-	/* Clear alt interrupt latch and enable bits */
-	ulpi_write(phy, 0x1F, 0x92);
-	ulpi_write(phy, 0x1F, 0x95);
-	udelay(100);
 }
 
 static void msm_otg_start_peripheral(struct usb_otg *otg, int on)
@@ -2488,6 +2473,29 @@ static void msm_chg_enable_dcd(struct msm_otg *motg)
 	 */
 	ulpi_write(phy, 0x04, 0x0B);
 	ulpi_write(phy, 0x10, 0x85);
+}
+
+static void msm_chg_block_on(struct msm_otg *motg)
+{
+	struct usb_phy *phy = &motg->phy;
+	u32 func_ctrl;
+
+	/* put the controller in non-driving mode */
+	msm_otg_dbg_log_event(&motg->phy, "PHY NON DRIVE", 0, 0);
+	func_ctrl = ulpi_read(phy, ULPI_FUNC_CTRL);
+	dev_err(motg->phy.dev, "non-drive mode value 0x%x\n", func_ctrl);
+	func_ctrl &= ~ULPI_FUNC_CTRL_OPMODE_MASK;
+	func_ctrl |= ULPI_FUNC_CTRL_OPMODE_NONDRIVING;
+	ulpi_write(phy, func_ctrl, ULPI_FUNC_CTRL);
+
+	/* disable DP and DM pull down resistors */
+	ulpi_write(phy, 0x6, 0xC);
+	/* Clear charger detecting control bits */
+	ulpi_write(phy, 0x1F, 0x86);
+	/* Clear alt interrupt latch and enable bits */
+	ulpi_write(phy, 0x1F, 0x92);
+	ulpi_write(phy, 0x1F, 0x95);
+	udelay(100);
 }
 
 static void msm_chg_block_off(struct msm_otg *motg)
@@ -2786,7 +2794,7 @@ static void check_for_sdp_connection(struct work_struct *w)
 	struct msm_otg *motg = container_of(w, struct msm_otg, sdp_check.work);
 
 	/* Cable disconnected or device enumerated as SDP */
-	if (!motg->vbus_state || motg->phy.otg->gadget->state >=
+	if (!motg->vbus_state || motg->phy.otg->gadget->state >
 							USB_STATE_DEFAULT)
 		return;
 
@@ -2867,13 +2875,18 @@ static void msm_otg_sm_work(struct work_struct *w)
 				break;
 			}
 
-			if (get_psy_type(motg) == POWER_SUPPLY_TYPE_USB_FLOAT)
-				queue_delayed_work(motg->otg_wq,
-				  &motg->sdp_check,
-				  msecs_to_jiffies(SDP_CHECK_DELAY_MS));
-
 			pm_runtime_get_sync(otg->usb_phy->dev);
 			msm_otg_start_peripheral(otg, 1);
+			if (get_psy_type(motg) == POWER_SUPPLY_TYPE_USB_FLOAT ||
+				(get_psy_type(motg) == POWER_SUPPLY_TYPE_USB &&
+				motg->enable_sdp_check_timer)) {
+				queue_delayed_work(motg->otg_wq,
+					&motg->sdp_check,
+					msecs_to_jiffies(
+					(phy->flags & PHY_SOFT_CONNECT) ?
+					SDP_CHECK_DELAY_MS :
+					SDP_CHECK_BOOT_DELAY_MS));
+			}
 			otg->state = OTG_STATE_B_PERIPHERAL;
 		} else {
 			pr_debug("Cable disconnected\n");
@@ -3253,7 +3266,7 @@ static int msm_otg_mode_open(struct inode *inode, struct file *file)
 const struct file_operations msm_otg_mode_fops = {
 	.open = msm_otg_mode_open,
 	.read = seq_read,
-
+	//.write = msm_otg_mode_write,
 	.llseek = seq_lseek,
 	.release = single_release,
 };
@@ -3410,7 +3423,6 @@ static int msm_otg_dpdm_regulator_enable(struct regulator_dev *rdev)
 			msm_otg_dbg_log_event(&motg->phy, "NonDrv err",
 					      motg->rm_pulldown, 0);
 	}
-	msm_otg_set_mode_nondriving(motg, true);
 
 	return ret;
 }
@@ -3435,7 +3447,6 @@ static int msm_otg_dpdm_regulator_disable(struct regulator_dev *rdev)
 		msm_otg_dbg_log_event(&motg->phy, "EN Pulldown",
 				      motg->rm_pulldown, 0);
 	}
-	msm_otg_set_mode_nondriving(motg, false);
 
 	return ret;
 }
@@ -3494,21 +3505,25 @@ static struct dentry *msm_otg_dbg_root;
 static int msm_otg_debugfs_init(struct msm_otg *motg)
 {
 	struct dentry *msm_otg_dentry;
+//	struct msm_otg_platform_data *pdata = motg->pdata;
 
 	msm_otg_dbg_root = debugfs_create_dir("msm_otg", NULL);
 
 	if (!msm_otg_dbg_root || IS_ERR(msm_otg_dbg_root))
 		return -ENODEV;
 
+//	if ((pdata->mode == USB_OTG || pdata->mode == USB_PERIPHERAL) &&
+//	pdata->otg_control == OTG_USER_CONTROL) {
 
-		msm_otg_dentry = debugfs_create_file("mode", 0644,
-			msm_otg_dbg_root, motg, &msm_otg_mode_fops);
+	msm_otg_dentry = debugfs_create_file("mode", 0644,
+		msm_otg_dbg_root, motg, &msm_otg_mode_fops);
 
-		if (!msm_otg_dentry) {
-			debugfs_remove(msm_otg_dbg_root);
-			msm_otg_dbg_root = NULL;
-			return -ENODEV;
-		}
+	if (!msm_otg_dentry) {
+		debugfs_remove(msm_otg_dbg_root);
+		msm_otg_dbg_root = NULL;
+		return -ENODEV;
+	}
+//	}
 
 	msm_otg_dentry = debugfs_create_file("bus_voting", 0644,
 			msm_otg_dbg_root, motg, &msm_otg_bus_fops);
@@ -4199,6 +4214,9 @@ static int msm_otg_probe(struct platform_device *pdev)
 	of_property_read_u32(pdev->dev.of_node, "qcom,pm-qos-latency",
 				&motg->pm_qos_latency);
 
+	motg->enable_sdp_check_timer = of_property_read_bool(pdev->dev.of_node,
+				"qcom,enumeration-check-for-sdp");
+
 	pdata = msm_otg_dt_to_pdata(pdev);
 	if (!pdata) {
 		ret = -ENOMEM;
@@ -4244,6 +4262,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 	motg->pdev = pdev;
 	motg->dbg_idx = 0;
 	motg->dbg_lock = __RW_LOCK_UNLOCKED(lck);
+	mutex_init(&motg->lock);
 
 	if (motg->pdata->bus_scale_table) {
 		motg->bus_perf_client =

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,6 +17,8 @@
 
 &blsp1_uart2 {
 	status = "ok";
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart_console_active>;
 };
 
 &sdhc_1 {
@@ -79,6 +81,9 @@
 };
 
 &i2c_5 { /* BLSP2 QUP1 (NFC) */
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 	status = "ok";
 	nq@28 {
 		compatible = "qcom,nq-nci";
@@ -126,13 +131,13 @@
 };
 
 &soc {
-	gpio_keys {
+	gpio_keys: gpio_keys {
 		compatible = "gpio-keys";
 		label = "gpio-keys";
 		pinctrl-names = "default";
 		pinctrl-0 = <&gpio_key_active>;
 
-		vol_up {
+		vol_up: vol_up {
 			label = "volume_up";
 			gpios = <&tlmm 91 0x1>;
 			linux,input-type = <1>;
@@ -165,10 +170,8 @@
 		input-device-name = "gf3208";
 		interrupt-parent = <&tlmm>;
 		interrupts = <48 0x0>;
-
 		goodix,gpio_reset    = <&tlmm 124 0>;
 		goodix,gpio_irq      = <&tlmm 48 0>;
-
 		clock-names = "iface_clk", "core_clk";
 		clocks = <&clock_gcc clk_gcc_blsp1_ahb_clk>,
 		<&clock_gcc clk_gcc_blsp1_qup1_spi_apps_clk>;
@@ -202,8 +205,6 @@
 		pinctrl-2 = <&fpc_int_low>;
 	};
 };
-
-
 
 &tlmm {
 	pmx_ts_rst_active {
@@ -389,6 +390,9 @@
 };
 
 &i2c_2 {
+#address-cells = <1>;
+#size-cells = <0>;
+
 #include "smb1355.dtsi"
 };
 

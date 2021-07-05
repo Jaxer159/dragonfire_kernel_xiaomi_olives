@@ -2,7 +2,7 @@
  * ILITEK Touch IC driver
  *
  * Copyright (C) 2011 ILI Technology Corporation.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: Dicky Chiang <dicky_chiang@ilitek.com>
  *
@@ -653,7 +653,7 @@ static struct spi_device_id tp_spi_id[] = {
 	{TDDI_DEV_ID, 0},
 };
 
-bool ilitek_gesture_flag;
+bool ilitek_gesture_flag = true;
 
 int ilitek_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {

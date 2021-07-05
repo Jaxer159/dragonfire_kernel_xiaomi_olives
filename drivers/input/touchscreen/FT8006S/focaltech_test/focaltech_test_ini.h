@@ -1,5 +1,6 @@
 /************************************************************************
 * Copyright (C) 2012-2019, Focaltech Systems (R)£¬All Rights Reserved.
+* Copyright (C) 2021 XiaoMi, Inc.
 *
 * File Name: focaltech_test_ini.h
 *
@@ -140,7 +141,7 @@ struct ini_data {
 /*****************************************************************************
 * Global variable or extern global variabls/functions
 *****************************************************************************/
-int fts_test_get_testparam_from_ini(char *config_name);
+int FT8006S_fts_test_get_testparam_from_ini(char *config_name);
 int get_keyword_value(char *section, char *name, int *value);
 
 #define get_value_interface(name, value) \

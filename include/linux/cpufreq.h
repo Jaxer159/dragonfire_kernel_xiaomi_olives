@@ -598,32 +598,10 @@ extern struct cpufreq_governor cpufreq_gov_interactive;
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_SCHED)
 extern struct cpufreq_governor cpufreq_gov_sched;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_sched)
-#define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_sched)
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL)
 extern struct cpufreq_governor cpufreq_gov_schedutil;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_schedutil)
-#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_BLU_SCHEDUTIL)
-extern struct cpufreq_governor cpufreq_gov_blu_schedutil;
-#define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_blu_schedutil)
-#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_PIXUTIL)
-extern struct cpufreq_governor cpufreq_gov_pixutil;
-#define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_pixutil)
-#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_ENERGY_DCFC)
-extern struct cpufreq_governor energy_dcfc_gov;
-#define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_energy_dcfc)
-#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_PIXEL_SMURFUTIL)
-extern struct cpufreq_governor cpufreq_gov_pixel_smurfutil;
-#define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_pixel_smurfutil)
 #endif
-
-static inline bool cpufreq_this_cpu_can_update(struct cpufreq_policy *policy)
-{
-	/* Allow remote callbacks only on the CPUs sharing cpufreq policy */
-	if (cpumask_test_cpu(smp_processor_id(), policy->cpus))
-		return true;
-
-	return false;
-}
 
 /*********************************************************************
  *                     FREQUENCY TABLE HELPERS                       *

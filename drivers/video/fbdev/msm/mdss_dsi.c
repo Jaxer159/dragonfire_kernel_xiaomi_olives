@@ -1,5 +1,5 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- * Copyright (C) 2020 XiaoMi, Inc.
+/* Copyright (c) 2012-2019, 2021, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -30,12 +30,17 @@
 #include <linux/mdss_io_util.h>
 #include <linux/dma-buf.h>
 
+#ifdef CONFIG_XIAOMI_SDM439
+#include <linux/sdm439.h>
+#endif
+
 #include "mdss.h"
 #include "mdss_panel.h"
 #include "mdss_dsi.h"
 #include "mdss_debug.h"
 #include "mdss_dsi_phy.h"
 #include "mdss_dba_utils.h"
+#include "mdss_smmu.h"
 #include <linux/hqsysfs.h>
 
 #define XO_CLK_RATE	19200000
@@ -1340,6 +1345,8 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata, int power_state)
 	int ret = 0;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	struct mdss_panel_info *panel_info = NULL;
+	struct platform_device *pdev;
+	struct dsi_buf *tp;
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -1350,6 +1357,16 @@ static int mdss_dsi_off(struct mdss_panel_data *pdata, int power_state)
 				panel_data);
 
 	panel_info = &ctrl_pdata->panel_data.panel_info;
+
+	pdev = mdss_res->pdev;
+	tp = &ctrl_pdata->tx_buf;
+	mdss_smmu_dma_free_coherent(&pdev->dev, SZ_4K, tp->start, tp->dmap,
+			ctrl_pdata->dma_addr, MDSS_IOMMU_DOMAIN_UNSECURE);
+	tp->end = NULL;
+	tp->size = 0;
+	ctrl_pdata->dma_addr = 0;
+	tp->start = NULL;
+	tp->dmap = 0;
 
 	pr_debug("%s+: ctrl=%pK ndx=%d power_state=%d\n",
 		__func__, ctrl_pdata, ctrl_pdata->ndx, power_state);
@@ -1519,6 +1536,8 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 	struct mipi_panel_info *mipi;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 	int cur_power_state;
+	struct platform_device *pdev;
+	struct dsi_buf *tp;
 
 	if (pdata == NULL) {
 		pr_err("%s: Invalid input data\n", __func__);
@@ -1527,6 +1546,20 @@ int mdss_dsi_on(struct mdss_panel_data *pdata)
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
+
+	pdev = mdss_res->pdev;
+	tp = &ctrl_pdata->tx_buf;
+	if (!ctrl_pdata->mdss_util->iommu_attached())
+		pr_err("%s : iommu not attached\n", __func__);
+
+	ret = mdss_smmu_dma_alloc_coherent(&pdev->dev, SZ_4K, &tp->dmap,
+		&ctrl_pdata->dma_addr, (void *)&tp->start, GFP_KERNEL,
+			MDSS_IOMMU_DOMAIN_UNSECURE);
+	if (IS_ERR_VALUE((unsigned long)ret))
+		pr_err("%s : mdss_smmu_dma_alloc_coherent failed\n", __func__);
+
+	tp->end = tp->start + SZ_4K;
+	tp->size = SZ_4K;
 
 	if (ctrl_pdata->debugfs_info)
 		mdss_dsi_validate_debugfs_info(ctrl_pdata);
@@ -1959,6 +1992,9 @@ static void __mdss_dsi_update_video_mode_total(struct mdss_panel_data *pdata,
 		return;
 	}
 
+	if (ctrl_pdata->timing_db_mode)
+		MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x1e8, 0x1);
+
 	vsync_period =
 		mdss_panel_get_vtotal(&pdata->panel_info);
 	hsync_period =
@@ -1968,23 +2004,13 @@ static void __mdss_dsi_update_video_mode_total(struct mdss_panel_data *pdata,
 	new_dsi_v_total =
 		((vsync_period - 1) << 16) | (hsync_period - 1);
 
-	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x2C,
-			(current_dsi_v_total | 0x8000000));
-	if (new_dsi_v_total & 0x8000000) {
-		MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x2C,
-				new_dsi_v_total);
-	} else {
-		MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x2C,
-				(new_dsi_v_total | 0x8000000));
-		MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x2C,
-				(new_dsi_v_total & 0x7ffffff));
-	}
+	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x2C, new_dsi_v_total);
 
 	if (ctrl_pdata->timing_db_mode)
 		MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x1e4, 0x1);
 
-	pr_debug("%s new_fps:%d vsync:%d hsync:%d frame_rate:%d\n",
-			__func__, new_fps, vsync_period, hsync_period,
+	pr_debug("%s new_fps:%d new_vtotal:0x%X cur_vtotal:0x%X frame_rate:%d\n",
+			__func__, new_fps, new_dsi_v_total, current_dsi_v_total,
 			ctrl_pdata->panel_data.panel_info.mipi.frame_rate);
 
 	ctrl_pdata->panel_data.panel_info.current_fps = new_fps;
@@ -2947,7 +2973,7 @@ u32 white_point_num_g;
 u32 white_point_num_b;
 #endif
 
-#if defined(CONFIG_PROJECT_OLIVE) || defined(CONFIG_PROJECT_OLIVELITE) || defined(CONFIG_PROJECT_OLIVEWOOD)
+#if defined(CONFIG_PROJECT_OLIVES) || defined(CONFIG_XIAOMI_SDM439)
 char tp_lockdown_info[40] = {0};
 #endif
 
@@ -2964,7 +2990,7 @@ static struct device_node *mdss_dsi_find_panel_of_node(
 	char *wponit_str;
 #endif
 
-#if defined(CONFIG_PROJECT_OLIVE) || defined(CONFIG_PROJECT_OLIVELITE) || defined(CONFIG_PROJECT_OLIVEWOOD)
+#if defined(CONFIG_PROJECT_OLIVES) || defined(CONFIG_XIAOMI_SDM439)
 	char *tplock_str;
 #endif
 
@@ -2992,7 +3018,21 @@ static struct device_node *mdss_dsi_find_panel_of_node(
 		}
 #endif
 
-#if defined(CONFIG_PROJECT_OLIVE) || defined(CONFIG_PROJECT_OLIVELITE) || defined(CONFIG_PROJECT_OLIVEWOOD)
+#ifdef CONFIG_XIAOMI_SDM439
+        if (sdm439_current_device == XIAOMI_OLIVES) {
+            tplock_str = strnstr(panel_cfg, ":tplock=", len);
+            if (!tplock_str) {
+                pr_err("%s:[tp lockdown info] tp lockdown info is not present in %s\n",
+                        __func__, panel_cfg);
+            } else {
+                snprintf(tp_lockdown_info, sizeof (tp_lockdown_info), "%c%c%c%c%c%c%c%c%0x%c%c%c%c%c%c%c", \
+                    tplock_str[8], tplock_str[9], tplock_str[10], tplock_str[11], tplock_str[12], tplock_str[13], tplock_str[14], tplock_str[15], \
+                    (tplock_str[16] - '0'), tplock_str[17], tplock_str[18], tplock_str[19], tplock_str[20], tplock_str[21], tplock_str[22], tplock_str[23]);
+                pr_err("[tp lockdown info] tp_lockdown_info = %s\n", tp_lockdown_info);
+            }
+        }
+#else
+#ifdef CONFIG_PROJECT_OLIVES
 		tplock_str = strnstr(panel_cfg, ":tplock=", len);
 		if (!tplock_str) {
 			pr_err("%s:[tp lockdown info] tp lockdown info is not present in %s\n",
@@ -3003,6 +3043,7 @@ static struct device_node *mdss_dsi_find_panel_of_node(
 				(tplock_str[16] - '0'), tplock_str[17], tplock_str[18], tplock_str[19], tplock_str[20], tplock_str[21], tplock_str[22], tplock_str[23]);
 			pr_err("[tp lockdown info] tp_lockdown_info = %s\n", tp_lockdown_info);
 		}
+#endif
 #endif
 
 		/* check if any override parameters are set */
@@ -3629,6 +3670,10 @@ static int mdss_dsi_parse_dt_params(struct platform_device *pdev,
 	sdata->cmd_clk_ln_recovery_en =
 		of_property_read_bool(pdev->dev.of_node,
 		"qcom,dsi-clk-ln-recovery");
+
+	sdata->skip_clamp =
+		of_property_read_bool(pdev->dev.of_node,
+		"qcom,mdss-skip-clamp");
 
 	return 0;
 }

@@ -1,4 +1,5 @@
 /* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -2093,6 +2094,7 @@ static int venus_hfi_session_init(void *device, void *session_id,
 		void **new_session)
 {
 	struct hfi_cmd_sys_session_init_packet pkt;
+	struct hfi_cmd_sys_set_property_packet feature_pkt;
 	struct venus_hfi_device *dev;
 	struct hal_session *s;
 
@@ -2122,6 +2124,22 @@ static int venus_hfi_session_init(void *device, void *session_id,
 	list_add_tail(&s->list, &dev->sess_head);
 
 	__set_default_sys_properties(device);
+	if (dev->res) {
+		if (dev->res->enable_max_resolution) {
+			if (call_hfi_pkt_op(dev, sys_feature_config,
+				&feature_pkt)) {
+				dprintk(VIDC_ERR,
+					"Failed to create feature config pkt\n");
+				goto err_session_init_fail;
+			}
+
+			if (__iface_cmdq_write(dev, &feature_pkt)) {
+				dprintk(VIDC_WARN,
+					"Failed to set max resolutionfeature in f/w\n");
+				goto err_session_init_fail;
+			}
+		}
+	}
 
 	if (call_hfi_pkt_op(dev, session_init, &pkt,
 			s, session_type, codec_type)) {
@@ -3244,11 +3262,10 @@ err_no_work:
 	for (i = 0; !IS_ERR_OR_NULL(device->response_pkt) &&
 		i < num_responses; ++i) {
 		struct msm_vidc_cb_info *r = &device->response_pkt[i];
-		dprintk(VIDC_DBG, "Processing response %d of %d, type %d\n",
-			(i + 1), num_responses, r->response_type);
+
 		if (!__core_in_valid_state(device)) {
 			dprintk(VIDC_ERR,
-				"Ignore responses from %d to %d as device is in invalid state",
+				"Ignore responses from %d to %d as device is in invalid state\n",
 				(i + 1), num_responses);
 			break;
 		}

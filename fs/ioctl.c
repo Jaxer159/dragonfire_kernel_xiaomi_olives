@@ -2,7 +2,6 @@
  *  linux/fs/ioctl.c
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
- *  Copyright (C) 2020 XiaoMi, Inc.
  */
 
 #include <linux/syscalls.h>

@@ -2,7 +2,7 @@
  * ILITEK Touch IC driver
  *
  * Copyright (C) 2011 ILI Technology Corporation.
- * Copyright (C) 2020 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: Dicky Chiang <dicky_chiang@ilitek.com>
  *
@@ -319,7 +319,7 @@ static int ilitek_plat_irq_register(void)
 	ret = devm_request_threaded_irq(idev->dev, idev->irq_num,
 				   ilitek_plat_isr_top_half,
 				   ilitek_plat_isr_bottom_half,
-				   IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_PERF_CRITICAL, "ilitek", NULL);
+				   IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "ilitek", NULL);
 
 	if (ret != 0)
 		ipio_err("Failed to register irq handler, irq = %d, ret = %d\n", idev->irq_num, ret);
