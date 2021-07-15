@@ -93,7 +93,7 @@ cp $OUTDIR/arch/arm64/boot/dtbo.img $ZIP_DIR
 make normal &>/dev/null
 cd ..
 cd product/
-./clear.sh
+ls | grep -v empty.txt | xargs rm -rf
 cd ..
 VER=3.2
 ZIP_NAME="DragonFire-Kernel-olives-$VER.zip"
