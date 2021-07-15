@@ -95,7 +95,7 @@ cd ..
 cd product/
 ./clear.sh
 cd ..
-VER=3.1.1
+VER=3.2
 ZIP_NAME="DragonFire-Kernel-olives-$VER.zip"
 cp AnyKernel3/$ZIP_NAME product/
 # Build end
