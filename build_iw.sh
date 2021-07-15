@@ -8,7 +8,7 @@
 KERNEL_DIR=$PWD
 KERN_IMG=$KERNEL_DIR/out/arch/arm64/boot/Image.gz-dtb
 ZIP_DIR=$KERNEL_DIR/IW
-CONFIG=dragonfire_olives_iw_defconfig
+CONFIG=iw_olives-perf_defconfig
 
 # Export
 export ARCH=arm64
