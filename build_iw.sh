@@ -92,7 +92,7 @@ cp $KERN_IMG zImage
 cp $OUTDIR/arch/arm64/boot/dtbo.img $ZIP_DIR
 make normal &>/dev/null
 cd ..
-VER=3.1.1
+VER=3.2
 ZIP_NAME="IW-DragonFire-Kernel-olives-$VER.zip"
 cp IW/$ZIP_NAME product/
 # Build end
