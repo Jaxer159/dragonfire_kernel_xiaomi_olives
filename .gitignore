@@ -9,6 +9,8 @@
 #
 # Normal rules
 #
+product/
+!product/empty.txt
 AnyKernel3/
 IW/
 libufdt/
