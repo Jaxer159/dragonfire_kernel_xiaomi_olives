@@ -75,7 +75,7 @@ for MODULES in $(find "${OUTDIR}" -name '*.ko'); do
     find "${OUTDIR}" -name '*.ko' -exec cp {} "${VENDOR_MODULEDIR}" \;
 
     case ${MODULES} in
-            */wlan.ko)
+            */pronto_wlan.ko)
         cp "${MODULES}" "${VENDOR_MODULEDIR}/pronto_wlan.ko" ;;
     esac
 
