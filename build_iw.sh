@@ -73,7 +73,7 @@ STRIP="$HOME/toolchains/proton-clang/aarch64-linux-gnu/bin/strip$(echo "$(find "
 for MODULES in $(find "${OUTDIR}" -name '*.ko'); do
 
     case ${MODULES} in
-            */wlan.ko)
+            */pronto_wlan.ko)
         cp "${MODULES}" "${VENDOR_MODULEDIR}/pronto_wlan.ko" ;;
     esac
 
