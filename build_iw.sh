@@ -71,8 +71,6 @@ STRIP="$HOME/toolchains/proton-clang/aarch64-linux-gnu/bin/strip$(echo "$(find "
             sed -e 's/gcc/strip/')"
 
 for MODULES in $(find "${OUTDIR}" -name '*.ko'); do
-    "${STRIP}" --strip-unneeded --strip-debug "${MODULES}"
-    find "${OUTDIR}" -name '*.ko' -exec cp {} "${VENDOR_MODULEDIR}" \;
 
     case ${MODULES} in
             */wlan.ko)
