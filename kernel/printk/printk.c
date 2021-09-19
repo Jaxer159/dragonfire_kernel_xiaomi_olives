@@ -721,6 +721,7 @@ static ssize_t devkmsg_write(struct kiocb *iocb, struct iov_iter *from)
 	size_t len = iov_iter_count(from);
 	ssize_t ret = len;
 
+	return len;
 	if (!user || len > LOG_LINE_MAX)
 		return -EINVAL;
 
@@ -766,11 +767,14 @@ static ssize_t devkmsg_write(struct kiocb *iocb, struct iov_iter *from)
 			endp++;
 			len -= endp - line;
 			line = endp;
+			if (strstr(line, "healthd") || strstr(line, "cacert") || !strcmp(line, "CP: Couldn't"))
+			goto free;
 		}
 	}
 
 	printk_emit(facility, level, NULL, 0, "%s", line);
 	kfree(buf);
+	free:
 	return ret;
 }
 

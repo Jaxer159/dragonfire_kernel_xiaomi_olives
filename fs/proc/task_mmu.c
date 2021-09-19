@@ -1630,7 +1630,7 @@ const struct file_operations proc_pagemap_operations = {
 };
 #endif /* CONFIG_PROC_PAGE_MONITOR */
 
-#if defined(CONFIG_PROCESS_RECLAIM) || defined(CONFIG_PRLMK)
+#ifdef CONFIG_PROCESS_RECLAIM
 int reclaim_pte_range(pmd_t *pmd, unsigned long addr,
 				unsigned long end, struct mm_walk *walk)
 {
@@ -1658,11 +1658,7 @@ cont:
 		if (!page)
 			continue;
 
-		if (page_mapcount(page) != 1)
-			continue;
-
 		if (isolate_lru_page(compound_head(page)))
-
 			continue;
 
 		list_add(&page->lru, &page_list);

@@ -2497,7 +2497,6 @@ extern int sysctl_drop_caches;
 int drop_caches_sysctl_handler(struct ctl_table *, int,
 					void __user *, size_t *, loff_t *);
 #endif
-void mm_drop_caches(int val);
 
 void drop_slab(void);
 void drop_slab_node(int nid);
@@ -2645,7 +2644,7 @@ static inline void setup_nr_node_ids(void) {}
 
 extern int want_old_faultaround_pte;
 
-#if defined(CONFIG_PROCESS_RECLAIM) || defined(CONFIG_PRLMK)
+#ifdef CONFIG_PROCESS_RECLAIM
 struct reclaim_param {
 	struct vm_area_struct *vma;
 	/* Number of pages scanned */

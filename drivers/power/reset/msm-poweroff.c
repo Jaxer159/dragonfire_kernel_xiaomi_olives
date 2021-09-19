@@ -287,7 +287,8 @@ static void msm_restart_prepare(const char *cmd)
 	 * Kill download mode if master-kill switch is set
 	 */
 
-	set_dload_mode(download_mode && restart_mode == RESTART_DLOAD);
+	set_dload_mode(download_mode &&
+			(in_panic || restart_mode == RESTART_DLOAD));
 #endif
 
 	if (qpnp_pon_check_hard_reset_stored()) {
@@ -382,10 +383,6 @@ static void msm_restart_prepare(const char *cmd)
 				PON_RESTART_REASON_NORMAL);
 			__raw_writel(0x77665501, restart_reason);
 		}
-	} else {
-		qpnp_pon_set_restart_reason(
-			PON_RESTART_REASON_NORMAL);
-		__raw_writel(0x77665501, restart_reason);
 	}
 
 	flush_cache_all();

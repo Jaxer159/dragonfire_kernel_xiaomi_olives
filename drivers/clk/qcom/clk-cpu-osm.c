@@ -706,6 +706,22 @@ osm_set_index(struct clk_osm *c, unsigned int index)
 	if (!rate)
 		return;
 
+	core_num = parent->per_core_dcvs ? c->core_num : 0;
+
+	/* Skip the update if the current rate is the same as the new one */
+	mutex_lock(&parent->update_lock);
+	current_index = clk_osm_read_reg(parent,
+				DCVS_PERF_STATE_DESIRED_REG(core_num,
+							is_sdm845v1));
+	if (current_index == index)
+		goto unlock;
+
+	/* The old rate needs time to settle before it can be changed again */
+	delta_us = ktime_us_delta(ktime_get_boottime(), parent->last_update);
+	if (delta_us < 10000)
+		usleep_range(10000 - delta_us, 11000 - delta_us);
+	parent->last_update = ktime_get_boottime();
+
 	clk_set_rate(c->hw.clk, clk_round_rate(c->hw.clk, rate));
 }
 

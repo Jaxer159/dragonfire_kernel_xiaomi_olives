@@ -9,11 +9,6 @@
 #
 # Normal rules
 #
-product/
-!product/empty.txt
-AnyKernel3/
-IW/
-libufdt/
 .*
 *.o
 *.o.*
@@ -55,9 +50,6 @@ Module.symvers
 /vmlinuz
 /System.map
 /Module.markers
-/olive_anykernel
-/release
-/out
 
 #
 # Debian directory (make deb-pkg)

@@ -859,8 +859,8 @@ source "kernel/gcov/Kconfig"
 
 config PROJECT_PINE
     default n
-    bool "If target device is pine."
+    bool "Enable if the target device is pine (Redmi 7A)."
 
 config PROJECT_OLIVES
     default n
-    bool "If target device is of the olive family."
+    bool "Enable if the target device belongs to the olives family (Redmi 8, Redmi 8A and Redmi 8A Dual/Pro)." 

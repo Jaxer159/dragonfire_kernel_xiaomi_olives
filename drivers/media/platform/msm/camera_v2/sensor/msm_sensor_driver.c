@@ -748,7 +748,7 @@ static int32_t msm_sensor_driver_is_special_support(
 }
 
 // for olive caemra hw info
-#if defined OLIVE_MSM_CAMERA_HW_INFO || defined OLIVEWOOD_MSM_CAMERA_HW_INFO || defined OLIVELITE_MSM_CAMERA_HW_INFO
+#ifdef OLIVE_MSM_CAMERA_HW_INFO
 	uint32_t i = 0;
 	char olive_rear_camera_str_buff[6][2][20] = {
 		{"olive_imx486_ofilm", "sony_imx486_i"},
@@ -772,7 +772,6 @@ static int32_t msm_sensor_driver_is_special_support(
 
 	};
 #endif
-
 
 /* static function definition */
 int32_t msm_sensor_driver_probe(void *setting,
@@ -1214,7 +1213,7 @@ CSID_TG:
 
 	msm_sensor_fill_sensor_info(s_ctrl, probed_info, entity_name);
 	// to get proper camera info Start
-#if defined OLIVE_MSM_CAMERA_HW_INFO || defined OLIVEWOOD_MSM_CAMERA_HW_INFO || defined OLIVELITE_MSM_CAMERA_HW_INFO
+#ifdef OLIVE_MSM_CAMERA_HW_INFO
 	if (0 == s_ctrl->id) {
 		for (i = 0; i < 6; i++)	{
 			if (strncmp((char *)(s_ctrl->sensordata->eeprom_name),
@@ -1243,6 +1242,7 @@ CSID_TG:
 			}
 		}
 	}
+#else
 	if (0 == s_ctrl->id) {
 		if (strncmp((char *)(s_ctrl->sensordata->eeprom_name),
 			"pine_ov13855_qtech",

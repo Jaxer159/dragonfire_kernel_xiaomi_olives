@@ -135,6 +135,20 @@ config GENERIC_TRACER
 	bool
 	select TRACING
 
+if TRACING
+
+config DISABLE_TRACE_PRINTK
+	bool "Force disable trace_printk() usage"
+	default y
+	help
+	  When trace_printk() is used in any of the kernel source, it enables
+	  debugging functions which are not desired for production kernel.
+	  Enabling this option will replace trace_printk() with pr_debug().
+
+	  If in doubt, say Y.
+
+endif
+
 #
 # Minimum requirements an architecture has to meet for us to
 # be able to offer generic tracing facilities:
@@ -751,7 +765,6 @@ config TRACE_ENUM_MAP_FILE
 config TRACING_EVENTS_GPIO
 	bool "Trace gpio events"
 	depends on GPIOLIB
-	default y
 	help
 	  Enable tracing events for gpio subsystem
 

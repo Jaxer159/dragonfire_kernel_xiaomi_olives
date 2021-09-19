@@ -965,6 +965,99 @@ config HAVE_UNSTABLE_SCHED_CLOCK
 config GENERIC_SCHED_CLOCK
 	bool
 
+menu "Scheduler features"
+
+config UCLAMP_TASK
+	bool "Enable utilization clamping for RT/FAIR tasks"
+	depends on CPU_FREQ_GOV_SCHEDUTIL
+	help
+	  This feature enables the scheduler to track the clamped utilization
+	  of each CPU based on RUNNABLE tasks scheduled on that CPU.
+
+	  With this option, the user can specify the min and max CPU
+	  utilization allowed for RUNNABLE tasks. The max utilization defines
+	  the maximum frequency a task should use while the min utilization
+	  defines the minimum frequency it should use.
+
+	  Both min and max utilization clamp values are hints to the scheduler,
+	  aiming at improving its frequency selection policy, but they do not
+	  enforce or grant any specific bandwidth for tasks.
+
+	  If in doubt, say N.
+
+config UCLAMP_BUCKETS_COUNT
+	int "Number of supported utilization clamp buckets"
+	range 5 20
+	default 5
+	depends on UCLAMP_TASK
+	help
+	  Defines the number of clamp buckets to use. The range of each bucket
+	  will be SCHED_CAPACITY_SCALE/UCLAMP_BUCKETS_COUNT. The higher the
+	  number of clamp buckets the finer their granularity and the higher
+	  the precision of clamping aggregation and tracking at run-time.
+
+	  For example, with the minimum configuration value we will have 5
+	  clamp buckets tracking 20% utilization each. A 25% boosted tasks will
+	  be refcounted in the [20..39]% bucket and will set the bucket clamp
+	  effective value to 25%.
+	  If a second 30% boosted task should be co-scheduled on the same CPU,
+	  that task will be refcounted in the same bucket of the first task and
+	  it will boost the bucket clamp effective value to 30%.
+	  The clamp effective value of a bucket is reset to its nominal value
+	  (20% in the example above) when there are no more tasks refcounted in
+	  that bucket.
+
+	  An additional boost/capping margin can be added to some tasks. In the
+	  example above the 25% task will be boosted to 30% until it exits the
+	  CPU. If that should be considered not acceptable on certain systems,
+	  it's always possible to reduce the margin by increasing the number of
+	  clamp buckets to trade off used memory for run-time tracking
+	  precision.
+
+	  If in doubt, use the default value.
+
+endmenu
+
+config UCLAMP_ASSIST
+	bool "UClamp configuration helper"
+	depends on CPUSETS && ANDROID && UCLAMP_TASK && UCLAMP_TASK_GROUP
+	help
+	  This option enabled in-kernel uclamp setting overrides.
+menu "FAIR Scheuler tunables"
+
+choice
+	prompt "Utilization's PELT half-Life"
+	default PELT_UTIL_HALFLIFE_32
+	help
+	  Allows choosing one of the possible values for the PELT half-life to
+	  be used for the update of the utilization of tasks and CPUs.
+	  The half-life is the amount of [ms] required by the PELT signal to
+	  build up to 50% utilization. The higher the half-life the longer it
+	  takes for a task to be represented as a big one.
+
+	  If not sure, use the default of 32 ms.
+
+config PELT_UTIL_HALFLIFE_32
+	bool "32 ms, default for server"
+
+config PELT_UTIL_HALFLIFE_16
+	bool "16 ms, suggested for interactive workloads"
+	help
+	  Use 16ms as PELT half-life value. This will increase the ramp-up and
+	  decay of utlization and load twice as fast as for the default
+	  configuration using 32ms.
+
+config PELT_UTIL_HALFLIFE_8
+	bool "8 ms, very fast"
+	help
+	  Use 8ms as PELT half-life value. This will increase the ramp-up and
+	  decay of utlization and load four time as fast as for the default
+	  configuration using 32ms.
+
+endchoice
+
+endmenu # FAIR Scheduler tunables"
+
 #
 # For architectures that want to enable the support for NUMA-affine scheduler
 # balancing logic:
@@ -1149,6 +1242,28 @@ config RT_GROUP_SCHED
 	  See Documentation/scheduler/sched-rt-group.txt for more information.
 
 endif #CGROUP_SCHED
+
+config UCLAMP_TASK_GROUP
+	bool "Utilization clamping per group of tasks"
+	depends on CGROUP_SCHED
+	depends on UCLAMP_TASK
+	default n
+	help
+	  This feature enables the scheduler to track the clamped utilization
+	  of each CPU based on RUNNABLE tasks currently scheduled on that CPU.
+
+	  When this option is enabled, the user can specify a min and max
+	  CPU bandwidth which is allowed for each single task in a group.
+	  The max bandwidth allows to clamp the maximum frequency a task
+	  can use, while the min bandwidth allows to define a minimum
+	  frequency a task will always use.
+
+	  When task group based utilization clamping is enabled, an eventually
+	  specified task-specific clamp value is constrained by the cgroup
+	  specified clamp value. Both minimum and maximum task clamping cannot
+	  be bigger than the corresponding clamping defined at task group level.
+
+	  If in doubt, say N.
 
 config CGROUP_PIDS
 	bool "PIDs controller"
@@ -1658,7 +1773,6 @@ config PRINTK_NMI
 
 config BUG
 	bool "BUG() support" if EXPERT
-	default y
 	help
           Disabling this option eliminates support for BUG and WARN, reducing
           the size of your kernel image and potentially quietly ignoring
@@ -1900,7 +2014,6 @@ config VM_EVENT_COUNTERS
 	  if VM event counters are disabled.
 
 config SLUB_DEBUG
-	default y
 	bool "Enable SLUB debugging support" if EXPERT
 	depends on SLUB && SYSFS
 	help
@@ -1925,7 +2038,6 @@ config SLUB_MEMCG_SYSFS_ON
 
 config COMPAT_BRK
 	bool "Disable heap randomization"
-	default y
 	help
 	  Randomizing heap placement makes heap exploits harder, but it
 	  also breaks ancient binaries (including anything libc5 based).

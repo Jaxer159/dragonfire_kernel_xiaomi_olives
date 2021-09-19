@@ -1,6 +1,6 @@
 VERSION = 4
 PATCHLEVEL = 9
-SUBLEVEL = 276
+SUBLEVEL = 282
 EXTRAVERSION =
 NAME = Roaring Lionus
 
@@ -731,7 +731,7 @@ endif
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS   += -Os
 else
-KBUILD_CFLAGS   += -O2
+KBUILD_CFLAGS   += -O3
 endif
 
 ifdef CONFIG_CC_WERROR
@@ -806,11 +806,6 @@ KBUILD_CFLAGS += $(call cc-disable-warning, tautological-compare)
 # See modpost pattern 2
 KBUILD_CFLAGS += $(call cc-option, -mno-global-merge,)
 KBUILD_CFLAGS += $(call cc-option, -fcatch-undefined-behavior)
-
-# Future support for zero initialization is still being debated, see
-# https://bugs.llvm.org/show_bug.cgi?id=45497. These flags are subject to being
-# renamed or dropped.
-KBUILD_CFLAGS   += -ftrivial-auto-var-init=zero -enable-trivial-auto-var-init-zero-knowing-it-will-be-removed-from-clang
 endif
 
 # These warnings generated too much noise in a regular build.
@@ -921,9 +916,6 @@ KBUILD_CFLAGS	+= $(call cc-option,-fmerge-constants)
 # Make sure -fstack-check isn't enabled (like gentoo apparently did)
 KBUILD_CFLAGS  += $(call cc-option,-fno-stack-check,)
 
-# conserve stack if available
-KBUILD_CFLAGS   += $(call cc-option,-fconserve-stack)
-
 # disallow errors like 'EXPORT_GPL(foo);' with missing header
 KBUILD_CFLAGS   += $(call cc-option,-Werror=implicit-int)
 
@@ -960,27 +952,6 @@ KBUILD_CFLAGS   += $(ARCH_CFLAGS)   $(KCFLAGS)
 ifeq ($(strip $(FACTORY_VERSION_MODE)) , true)
 KBUILD_CFLAGS += -DFACTORY_VERSION_ENABLE
 endif
-# =============FACTORY==================================
-
-# =============PROJECT==================================
-# Add macros by TARGET_PRODUCT for different projects
-ifeq ($(strip $(TARGET_PRODUCT)) , peony)
-# Define macros here only for Peony project
-else ifeq ($(strip $(TARGET_PRODUCT)) , pine)
-# Define macros here only for Pine project
-KBUILD_CFLAGS += -DPROJECT_PINE
-else ifeq ($(strip $(TARGET_PRODUCT)) , olive)
-# Define macros here only for Olive project
-KBUILD_CFLAGS += -DPROJECT_OLIVE
-else ifeq ($(strip $(TARGET_PRODUCT)) , olivelite)
-# Define macros here only for Olive project
-KBUILD_CFLAGS += -DPROJECT_OLIVELITE
-else ifeq ($(strip $(TARGET_PRODUCT)) , olivewood)
-# Define macros here only for Olive project
-KBUILD_CFLAGS += -DPROJECT_OLIVEWOOD
-else
-endif
-# =============PROJECT==================================
 
 # Use --build-id when available.
 LDFLAGS_BUILD_ID = $(patsubst -Wl$(comma)%,%,\

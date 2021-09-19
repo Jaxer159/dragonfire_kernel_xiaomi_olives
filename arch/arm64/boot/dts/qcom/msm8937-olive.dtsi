@@ -25,7 +25,7 @@
 	interrupt-parent = <&wakegic>;
 
 	chosen {
-		bootargs = "sched_enable_hmp=1 kpti=0";
+		bootargs = "kpti=0";
 	};
 
 	firmware: firmware {
@@ -43,7 +43,7 @@
 					dev = "/dev/block/platform/soc/7824900.sdhci/by-name/vendor";
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
-					fsmgr_flags = "wait";
+					fsmgr_flags = "wait,avb";
 					status = "ok";
 				};
 			};
@@ -299,7 +299,6 @@
 		reg = <0x4ab000 0x4>,
 			<0x193d100 0x4>;
 		reg-names = "pshold-base", "tcsr-boot-misc-detect";
-		qcom,force-warm-reboot;
 	};
 
 	qcom,mpm2-sleep-counter@4a3000 {
