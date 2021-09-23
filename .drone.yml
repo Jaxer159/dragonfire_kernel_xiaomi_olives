@@ -1,0 +1,21 @@
+--- 
+clone: 
+  depth: 1
+kind: pipeline
+name: DragonFire Kernel Build Machine
+steps: 
+  - 
+    environment: 
+      CHATIDQ: 
+        from_secret: CHATIDQ
+      CHATID:
+        from_secret: CHATID
+      TELEGRAM_TOKEN:
+        from_secret: TOKEN
+    commands: 
+      - "curl https://raw.githubusercontent.com/Dragonfire-Kernel/kernel_xiaomi_olives/a11/master/build.sh | bash"
+    image: azrim89/kernel:latest
+    name: Building DragonFire Kernel
+    trigger: 
+      branch: 
+        - a11/master
