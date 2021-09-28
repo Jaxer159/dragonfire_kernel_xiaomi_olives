@@ -287,8 +287,7 @@ static void msm_restart_prepare(const char *cmd)
 	 * Kill download mode if master-kill switch is set
 	 */
 
-	set_dload_mode(download_mode &&
-			(in_panic || restart_mode == RESTART_DLOAD));
+	set_dload_mode(download_mode && restart_mode == RESTART_DLOAD);
 #endif
 
 	if (qpnp_pon_check_hard_reset_stored()) {
@@ -310,6 +309,13 @@ static void msm_restart_prepare(const char *cmd)
 
 	if (force_warm_reboot)
 		pr_info("Forcing a warm reset of the system\n");
+
+	/* Perform a regular reboot upon panic or unspecified command */
+	if (in_panic || !cmd) {
+		__raw_writel(0x77665501, restart_reason);
+		cmd = NULL;
+		in_panic = false;
+	}
 
 	/* Hard reset the PMIC unless memory contents must be maintained. */
 	if (force_warm_reboot || need_warm_reset)
@@ -383,6 +389,8 @@ static void msm_restart_prepare(const char *cmd)
 				PON_RESTART_REASON_NORMAL);
 			__raw_writel(0x77665501, restart_reason);
 		}
+	} else if (in_panic) {
+		__raw_writel(0x77665501, restart_reason);
 	}
 
 	flush_cache_all();

@@ -6,7 +6,7 @@
 
 # Clone AnyKernel3
 if [ ! -d AnyKernel3 ]; then
-git clone https://github.com/Dragonfire-Kernel/AnyKernel3 -b dragonfire_olives AnyKernel3
+git clone https://github.com/Jaxer159/AnyKernel3 -b dragonfire_olives AnyKernel3
 fi
 
 #Download Clang
@@ -27,7 +27,7 @@ fi
 KERNEL_DIR=$PWD
 KERN_IMG=$KERNEL_DIR/out/arch/arm64/boot/Image.gz-dtb
 ZIP_DIR=$KERNEL_DIR/AnyKernel3
-CONFIG=mi439-perf_defconfig
+CONFIG=olives_dragonfire-perf_defconfig
 
 # Export
 export ARCH=arm64

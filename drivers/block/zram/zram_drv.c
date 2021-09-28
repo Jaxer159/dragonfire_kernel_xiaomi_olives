@@ -40,7 +40,8 @@ static DEFINE_IDR(zram_index_idr);
 static DEFINE_MUTEX(zram_index_mutex);
 
 static int zram_major;
-static const char *default_compressor = "lzo";
+//static const char *default_compressor = "lz4";
+static const char *default_compressor = CONFIG_ZRAM_DEFAULT_COMP_ALGORITHM;
 
 /* Module params (documentation at end) */
 static unsigned int num_devices = 1;
@@ -1736,9 +1737,12 @@ static ssize_t disksize_store(struct device *dev,
 	struct zram *zram = dev_to_zram(dev);
 	int err;
 
-	disksize = (u64)SZ_1G;
+	disksize = memparse(buf, NULL);
 	if (!disksize)
 		return -EINVAL;
+
+	if (disksize <= (u64)SZ_512M)
+		disksize = (u64)SZ_1G;
 
 	down_write(&zram->init_lock);
 	if (init_done(zram)) {

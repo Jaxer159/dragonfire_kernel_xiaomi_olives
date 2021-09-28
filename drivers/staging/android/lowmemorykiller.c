@@ -71,7 +71,7 @@
 static int enable_lmk = 1;
 module_param_named(enable_lmk, enable_lmk, int, 0644);
 
-static u32 lowmem_debug_level = 1;
+static u32 lowmem_debug_level = 0;
 static short lowmem_adj[6] = {
 	0,
 	1,
@@ -255,8 +255,10 @@ static short adj_max_shift = 353;
 module_param_named(adj_max_shift, adj_max_shift, short, 0644);
 
 /* User knob to enable/disable adaptive lmk feature */
-static int enable_adaptive_lmk;
-module_param_named(enable_adaptive_lmk, enable_adaptive_lmk, int, 0644);
+static int enable_adaptive_lmk = 0;
+static int enable_adaptive_lmk_dummy;
+module_param_named(enable_adaptive_lmk, enable_adaptive_lmk_dummy, int,
+		   S_IRUGO | S_IWUSR);
 
 /*
  * This parameter controls the behaviour of LMK when vmpressure is in
@@ -311,6 +313,7 @@ static int lmk_vmpressure_notifier(struct notifier_block *nb,
 	if (pressure >= 95) {
 		other_file = global_node_page_state(NR_FILE_PAGES) -
 			global_node_page_state(NR_SHMEM) -
+			global_node_page_state(NR_UNEVICTABLE) -
 			total_swapcache_pages();
 		other_free = global_page_state(NR_FREE_PAGES);
 
@@ -324,6 +327,7 @@ static int lmk_vmpressure_notifier(struct notifier_block *nb,
 
 		other_file = global_node_page_state(NR_FILE_PAGES) -
 			global_node_page_state(NR_SHMEM) -
+			global_node_page_state(NR_UNEVICTABLE) -
 			total_swapcache_pages();
 
 		other_free = global_page_state(NR_FREE_PAGES);
@@ -643,7 +647,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 #else
 	other_free = global_page_state(NR_FREE_PAGES) - totalreserve_pages;
 
-	if (global_node_page_state(NR_SHMEM) + total_swapcache_pages() +
+	if (global_node_page_state(NR_SHMEM) + global_node_page_state(NR_UNEVICTABLE) + total_swapcache_pages() <
 			global_node_page_state(NR_UNEVICTABLE) <
 			global_node_page_state(NR_FILE_PAGES))
 		other_file = global_node_page_state(NR_FILE_PAGES) -

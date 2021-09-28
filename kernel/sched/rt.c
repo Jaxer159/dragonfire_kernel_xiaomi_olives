@@ -9,7 +9,6 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/irq_work.h>
-#include "tune.h"
 #include <trace/events/sched.h>
 
 #include "walt.h"
@@ -1386,8 +1385,6 @@ enqueue_task_rt(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct sched_rt_entity *rt_se = &p->rt;
 
-	schedtune_enqueue_task(p, cpu_of(rq));
-
 	if (flags & ENQUEUE_WAKEUP)
 		rt_se->timeout = 0;
 
@@ -1401,8 +1398,6 @@ enqueue_task_rt(struct rq *rq, struct task_struct *p, int flags)
 static void dequeue_task_rt(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct sched_rt_entity *rt_se = &p->rt;
-
-	schedtune_dequeue_task(p, cpu_of(rq));
 
 	update_curr_rt(rq);
 	dequeue_rt_entity(rt_se, flags);
@@ -2656,10 +2651,6 @@ const struct sched_class rt_sched_class = {
 #ifdef CONFIG_SCHED_WALT
 	.fixup_walt_sched_stats	= fixup_walt_sched_stats_common,
 	.fixup_cumulative_runnable_avg = walt_fixup_cumulative_runnable_avg,
-#endif
-
-#ifdef CONFIG_UCLAMP_TASK
-	.uclamp_enabled		= 1,
 #endif
 };
 

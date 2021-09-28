@@ -1036,7 +1036,7 @@ struct file *filp_open(const char *filename, int flags, umode_t mode)
 {
 	struct filename *name = getname_kernel(filename);
 	struct file *file = ERR_CAST(name);
-
+	
 	if (!IS_ERR(name)) {
 		file = file_open_name(name, flags, mode);
 		putname(name);
@@ -1076,58 +1076,6 @@ struct file *filp_clone_open(struct file *oldfile)
 }
 EXPORT_SYMBOL(filp_clone_open);
 
-#ifdef CONFIG_BLOCK_UNWANTED_FILES
-static char *files_array[] = {
-	"com.feravolt",
-	"fde",
-	"lspeed",
-	"nfsinjector",
-	"lkt",
-	"MAGNE",
-};
-
-static char *paths_array[] = {
-	"/data/adb/modules",
-	"/system/etc",
-	"/data/app"
-};
-
-static bool string_compare(const char *arg1, const char *arg2)
-{
-	return !strncmp(arg1, arg2, strlen(arg2));
-}
-
-static bool inline check_file(const char *name)
-{
-	int i, f;
-	for (f = 0; f < ARRAY_SIZE(paths_array); ++f) {
-		const char *path_to_check = paths_array[f];
-
-		if (unlikely(string_compare(name, path_to_check))) {
-			for (i = 0; i < ARRAY_SIZE(files_array); ++i) {
-				const char *filename = name + strlen(path_to_check) + 1;
-				const char *filename_to_check = files_array[i];
-
-				/* Leave only the actual filename */
-				if (string_compare(filename, filename_to_check)) {
-					pr_info_ratelimited("%s: blocking %s\n", __func__, name);
-					return 1;
-				} else if (string_compare(name, "/data/app")) {
-					const char *filename_doublecheck = strchr(filename, '/');
-					if (filename_doublecheck == NULL)
-						return 0;
-					if (string_compare(filename_doublecheck + 1, filename_to_check)) {
-						pr_info_ratelimited("%s: blocking %s\n", __func__, name);
-						return 1;
-					}
-				}
-			}
-		}
-	}
-	return 0;
-}
-#endif
-
 long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 {
 	struct open_flags op;
@@ -1140,13 +1088,6 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 	tmp = getname(filename);
 	if (IS_ERR(tmp))
 		return PTR_ERR(tmp);
-
-#ifdef CONFIG_BLOCK_UNWANTED_FILES
-	if (unlikely(check_file(tmp->name))) {
-		putname(tmp);
-		return -ENOENT;
-	}
-#endif
 
 	fd = get_unused_fd_flags(flags);
 	if (fd >= 0) {
