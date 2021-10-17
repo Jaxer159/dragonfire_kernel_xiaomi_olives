@@ -1413,6 +1413,9 @@ static int a6xx_gmu_start(struct kgsl_device *device)
 
 	/* Bring GMU out of reset */
 	kgsl_gmu_regwrite(device, A6XX_GMU_CM3_SYSRESET, 0);
+	/* Make sure the request completes before continuing */
+	wmb();
+
 	if (timed_poll_check(device,
 			A6XX_GMU_CM3_FW_INIT_RESULT,
 			0xBABEFACE,
@@ -1609,6 +1612,18 @@ static bool a6xx_gx_is_on(struct adreno_device *adreno_dev)
 }
 
 /*
+ * a6xx_cx_is_on() - Check if CX is on using GPUCC register
+ * @device - Pointer to KGSL device struct
+ */
+static bool a6xx_cx_is_on(struct kgsl_device *device)
+{
+	unsigned int val;
+
+	kgsl_gmu_regread(device, A6XX_GPU_CC_CX_GDSCR, &val);
+	return (val & BIT(31));
+}
+
+/*
  * a6xx_sptprac_is_on() - Check if SPTP is on using pwr status register
  * @adreno_dev - Pointer to adreno_device
  * This check should only be performed if the keepalive bit is set or it
@@ -1640,7 +1655,7 @@ static int a6xx_gfx_rail_on(struct kgsl_device *device)
 	unsigned int perf_idx;
 	int ret;
 
-	perf_idx = pwr->num_pwrlevels - (pwr->num_pwrlevels - 2);
+	perf_idx = pwr->num_pwrlevels - pwr->default_pwrlevel - 1;
 	default_opp = &gmu->rpmh_votes.gx_votes[perf_idx];
 
 	kgsl_gmu_regwrite(device, A6XX_GMU_BOOT_SLUMBER_OPTION,
@@ -1669,8 +1684,8 @@ static int a6xx_notify_slumber(struct kgsl_device *device)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct gmu_device *gmu = &device->gmu;
-	int bus_level = pwr->pwrlevels[pwr->num_pwrlevels - 1].bus_freq;
-	int perf_idx = gmu->num_gpupwrlevels - (pwr->num_pwrlevels - 2);
+	int bus_level = pwr->pwrlevels[pwr->default_pwrlevel].bus_freq;
+	int perf_idx = gmu->num_gpupwrlevels - pwr->default_pwrlevel - 1;
 	int ret, state;
 
 	/* Disable the power counter so that the GMU is not busy */
@@ -1881,6 +1896,13 @@ static int a6xx_gmu_fw_start(struct kgsl_device *device,
 
 	kgsl_gmu_regwrite(device, A6XX_GMU_AHB_FENCE_RANGE_0,
 			FENCE_RANGE_MASK);
+
+	/*
+	 * Make sure that CM3 state is at reset value. Snapshot is changing
+	 * NMI bit and if we boot up GMU with NMI bit set.GMU will boot straight
+	 * in to NMI handler without executing __main code
+	 */
+	kgsl_gmu_regwrite(device, A6XX_GMU_CM3_CFG, 0x4052);
 
 	/* Pass chipid to GMU FW, must happen before starting GMU */
 
@@ -2373,10 +2395,14 @@ static int a6xx_reset(struct kgsl_device *device, int fault)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret = -EINVAL;
 	int i = 0;
+	unsigned long flags = device->pwrctrl.ctrl_flags;
 
 	/* Use the regular reset sequence for No GMU */
 	if (!kgsl_gmu_isenabled(device))
 		return adreno_reset(device, fault);
+
+	/* Clear ctrl_flags to ensure clocks and regulators are turned off */
+	device->pwrctrl.ctrl_flags = 0;
 
 	/* Transition from ACTIVE to RESET state */
 	kgsl_pwrctrl_change_state(device, KGSL_STATE_RESET);
@@ -2428,6 +2454,8 @@ static int a6xx_reset(struct kgsl_device *device, int fault)
 	}
 
 	clear_bit(ADRENO_DEVICE_HARD_RESET, &adreno_dev->priv);
+
+	device->pwrctrl.ctrl_flags = flags;
 
 	if (ret)
 		return ret;
@@ -3911,6 +3939,7 @@ struct adreno_gpudev adreno_a6xx_gpudev = {
 	.preemption_context_init = a6xx_preemption_context_init,
 	.preemption_context_destroy = a6xx_preemption_context_destroy,
 	.gx_is_on = a6xx_gx_is_on,
+	.cx_is_on = a6xx_cx_is_on,
 	.sptprac_is_on = a6xx_sptprac_is_on,
 	.ccu_invalidate = a6xx_ccu_invalidate,
 	.perfcounter_update = a6xx_perfcounter_update,

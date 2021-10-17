@@ -790,6 +790,8 @@ static int gmu_rpmh_init(struct gmu_device *gmu, struct kgsl_pwrctrl *pwr)
 
 static void send_nmi_to_gmu(struct adreno_device *adreno_dev)
 {
+	u32 val;
+
 	/* Mask so there's no interrupt caused by NMI */
 	adreno_write_gmureg(adreno_dev,
 			ADRENO_REG_GMU_GMU2HOST_INTR_MASK, 0xFFFFFFFF);
@@ -798,9 +800,10 @@ static void send_nmi_to_gmu(struct adreno_device *adreno_dev)
 	wmb();
 	adreno_write_gmureg(adreno_dev,
 		ADRENO_REG_GMU_NMI_CONTROL_STATUS, 0);
-	adreno_write_gmureg(adreno_dev,
-		ADRENO_REG_GMU_CM3_CFG,
-		(1 << GMU_CM3_CFG_NONMASKINTR_SHIFT));
+
+	adreno_read_gmureg(adreno_dev, ADRENO_REG_GMU_CM3_CFG, &val);
+	val |= 1 << GMU_CM3_CFG_NONMASKINTR_SHIFT;
+	adreno_write_gmureg(adreno_dev, ADRENO_REG_GMU_CM3_CFG, val);
 
 	/* Make sure the NMI is invoked before we proceed*/
 	wmb();
@@ -1321,6 +1324,8 @@ static int gmu_enable_gdsc(struct gmu_device *gmu)
 #define CX_GDSC_TIMEOUT	5000	/* ms */
 static int gmu_disable_gdsc(struct gmu_device *gmu)
 {
+	struct kgsl_device *device = container_of(gmu, struct kgsl_device, gmu);
+	struct adreno_gpudev *gpudev = ADRENO_GPU_DEVICE(ADRENO_DEVICE(device));
 	int ret;
 	unsigned long t;
 
@@ -1342,13 +1347,13 @@ static int gmu_disable_gdsc(struct gmu_device *gmu)
 	 */
 	t = jiffies + msecs_to_jiffies(CX_GDSC_TIMEOUT);
 	do {
-		if (!regulator_is_enabled(gmu->cx_gdsc))
+		if (gpudev->cx_is_on && !(gpudev->cx_is_on(device)))
 			return 0;
 		usleep_range(10, 100);
 
 	} while (!(time_after(jiffies, t)));
 
-	if (!regulator_is_enabled(gmu->cx_gdsc))
+	if (gpudev->cx_is_on && !(gpudev->cx_is_on(device)))
 		return 0;
 
 	dev_err(&gmu->pdev->dev, "GMU CX gdsc off timeout");
@@ -1442,7 +1447,7 @@ int gmu_start(struct kgsl_device *device)
 
 		/* Vote for 300MHz DDR for GMU to init */
 		ret = msm_bus_scale_client_update_request(gmu->pcl,
-				pwr->pwrlevels[pwr->num_pwrlevels - 1].bus_freq);
+				pwr->pwrlevels[pwr->default_pwrlevel].bus_freq);
 		if (ret)
 			dev_err(&gmu->pdev->dev,
 				"Failed to allocate gmu b/w: %d\n", ret);
@@ -1457,7 +1462,7 @@ int gmu_start(struct kgsl_device *device)
 			goto error_gmu;
 
 		/* Request default DCVS level */
-		gmu_change_gpu_pwrlevel(device, pwr->num_pwrlevels - 1);
+		gmu_change_gpu_pwrlevel(device, pwr->default_pwrlevel);
 		msm_bus_scale_client_update_request(gmu->pcl, 0);
 		break;
 
@@ -1485,7 +1490,7 @@ int gmu_start(struct kgsl_device *device)
 		if (ret)
 			goto error_gmu;
 
-		gmu_change_gpu_pwrlevel(device, pwr->num_pwrlevels - 1);
+		gmu_change_gpu_pwrlevel(device, pwr->default_pwrlevel);
 		break;
 
 	case KGSL_STATE_RESET:
@@ -1508,7 +1513,7 @@ int gmu_start(struct kgsl_device *device)
 
 			/* Send DCVS level prior to reset*/
 			gmu_change_gpu_pwrlevel(device,
-				pwr->num_pwrlevels - 1);
+				pwr->default_pwrlevel);
 		} else {
 			/* GMU fast boot */
 			hfi_stop(gmu);
